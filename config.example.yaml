@@ -45,14 +45,10 @@ session:
   # Session ID file (only used if persistent: true)
   session_file: "./state/session_id.txt"
 
-# Optional: Real-world context via Dytto
-# Lets the GM respond to your actual mood/energy
-dytto:
-  enabled: false
-  # Get your API key from https://dytto.app
-  api_key: ""
-  # Path to dytto CLI script (if using local script)
-  script_path: ""
+# # Optional: Real-world context via Dytto (experimental)
+# dytto:
+#   enabled: false
+#   api_key: ""
 
 # Logging
 logging:

@@ -101,24 +101,11 @@ agent:
   # "clawdbot" = Clawdbot CLI (advanced)
   mode: "claude"
   workspace: "./agent"
-
-# Optional: Real-world context (requires Dytto)
-dytto:
-  enabled: false
-  api_key: ""
 ```
 
-## How Rewards Work
+## How It Decides
 
-The agent uses rules in `GM_NARRATIVE.md` to decide when to intervene:
-
-| Event | Reward |
-|-------|--------|
-| Pokemon faints, another wins | Survivor gets EVs |
-| Same type used 10+ battles | Themed item |
-| Caught rare Pokemon | Better IVs |
-| Lost to gym twice | Party gets EVs |
-| Level up after close battle | Extra EVs |
+No hardcoded rules. The LLM reads game events and uses its own judgment to decide if/when to reward. `GM_NARRATIVE.md` gives it context about what kinds of moments matter, but the agent decides.
 
 ## Project Structure
 
@@ -159,10 +146,6 @@ GM.giveItem(itemId, quantity)
 GM.setShiny(slot)
 GM.setIVs(slot, hp, atk, def, spd, spatk, spdef)
 ```
-
-## Optional: Dytto Integration
-
-[Dytto](https://dytto.app) provides real-world context to the GM (mood, time of day, etc.). Enable in `config.yaml` with your API key.
 
 ## Clawdbot Mode (Optional)
 
