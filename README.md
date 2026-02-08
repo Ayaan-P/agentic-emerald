@@ -1,6 +1,16 @@
-# Agentic Emerald
+# Agentic Emerald 🎮✨
 
-An AI Game Master for Pokemon Emerald that watches your playthrough and subtly rewards story moments — making the game feel like it *knows* you.
+**An invisible AI Game Master for Pokemon Emerald.**
+
+The GM watches your playthrough and subtly rewards story moments. You never see it, but you *feel* that the game knows you.
+
+> "My Combusken learned the exact move I needed after that clutch battle..."
+> 
+> "Every time I lose, I somehow come back stronger..."
+> 
+> "This Ralts I caught is weirdly good..."
+
+That's the GM. That's your story being told.
 
 ## What It Does
 
@@ -54,7 +64,7 @@ You never see the GM. But you *feel* that something is different.
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/agentic-emerald.git
+git clone https://github.com/Ayaan-P/agentic-emerald.git
 cd agentic-emerald
 
 # Install Python dependencies
@@ -140,7 +150,7 @@ agentic-emerald/
 ├── daemon/
 │   └── agentic_emerald.py # Main daemon
 ├── lua/
-│   ├── gm_server.lua      # Socket server + event emitter
+│   ├── game_master_v2.lua # Main Lua script (load this in mGBA)
 │   ├── gm_tools.lua       # GM intervention functions
 │   ├── state.lua          # Game state reading
 │   └── events.lua         # Event detection
@@ -218,8 +228,8 @@ MIT
 
 ## Credits
 
-Built by [@ayaan](https://twitter.com/ayaan).
+Built by [Ayaan](https://github.com/Ayaan-P).
 
-The GM philosophy was developed through extensive playtesting of "what would make Pokemon feel alive?"
+The GM philosophy was developed through extensive playtesting asking: *"What would make Pokemon feel alive?"*
 
-Optionally integrates with [Clawdbot](https://clawdbot.com) for advanced agent management.
+Optionally integrates with [Clawdbot](https://clawdbot.com) for advanced agent features.
