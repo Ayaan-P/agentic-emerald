@@ -103,9 +103,11 @@ agent:
   workspace: "./agent"
 ```
 
-## How It Decides
+## How It Works
 
-No hardcoded rules. The LLM reads game events and uses its own judgment to decide if/when to reward. `GM_NARRATIVE.md` gives it context about what kinds of moments matter, but the agent decides.
+The agent tracks your entire playthrough — who you use, how you play, what patterns emerge. It logs everything to `PLAYTHROUGH.md` and uses that context to decide rewards.
+
+No hardcoded rules. The LLM reads game events + playthrough history and uses judgment. Someone who grinds gets different treatment than someone who rushes. A player who always leads with the same Pokemon builds loyalty. The agent notices.
 
 ## Project Structure
 
@@ -123,7 +125,7 @@ agentic-emerald/
 │   ├── GM_NARRATIVE.md    # Reward logic and rules
 │   └── GM_INSTRUCTIONS.md # Technical command reference
 ├── memory/
-│   └── PLAYTHROUGH.md     # Session log
+│   └── PLAYTHROUGH.md     # Playthrough history (agent writes here)
 ├── config.example.yaml
 └── requirements.txt
 ```
