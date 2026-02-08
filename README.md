@@ -38,15 +38,15 @@ The GM observes gameplay events and triggers rewards:
 
 ### Prerequisites
 
-- [mGBA](https://mgba.io/) emulator with Lua scripting enabled
-- Python 3.10+
-- An Anthropic API key (Claude)
-
-**Agent modes (pick one):**
-- **Claude CLI** (recommended): Uses your Claude Code/Max subscription — no API key needed
-- **Codex CLI**: Uses your OpenAI/Codex subscription
-- **Direct**: Calls Anthropic API with your API key
-- **Clawdbot**: Uses [Clawdbot](https://github.com/clawdbot/clawdbot) for advanced features
+- **mGBA** (0.10.1+) with Lua scripting enabled — [download](https://mgba.io/)
+  - Enable Lua: Tools → Scripting → Available scripts should be visible
+  - Windows WSL users: Use `127.0.0.1` for mGBA config, point to WSL IP for daemon
+- **Python** 3.10 or later
+- **Agent** (pick one):
+  - **Claude CLI** (recommended): Uses your Claude Code/Max subscription — no API key needed
+  - **Codex CLI**: Uses your OpenAI/Codex subscription
+  - **Direct API**: Calls Anthropic API (requires `ANTHROPIC_API_KEY`)
+  - **Clawdbot**: Uses [Clawdbot](https://github.com/clawdbot/clawdbot) for session persistence + advanced features
 
 ### Installation
 
@@ -65,9 +65,12 @@ cp config.example.yaml config.yaml
 
 ### Setup mGBA
 
-1. Open mGBA → Tools → Scripting
-2. Load `lua/game_master_v2.lua`
-3. The script will start a socket server for the daemon
+1. **Open a Pokemon Emerald ROM** in mGBA
+2. **Tools → Scripting** → Click "Script..." button
+3. **Select** `lua/game_master_v2.lua` from your agentic-emerald directory
+4. **Console** should show: `[GM] Connected to daemon on 127.0.0.1:8888`
+   - If no connection yet, that's OK — the daemon will connect when it starts
+5. Keep the Scripting console open while playing
 
 ### Run
 
@@ -80,28 +83,48 @@ python daemon/agentic_emerald.py
 
 ## Configuration
 
-Edit `config.yaml`:
+### Basic Setup
+
+1. **Copy example:** `cp config.example.yaml config.yaml`
+2. **Edit** `config.yaml` with your setup:
 
 ```yaml
 # Connection to mGBA Lua server
 emulator:
-  host: "127.0.0.1"  # Use your host IP if running in WSL
+  host: "127.0.0.1"  # Use "127.0.0.1" for same machine
+                     # Use "172.28.208.1" (WSL IP) if mGBA is on Windows
   port: 8888
 
-# Paths
-paths:
-  state_dir: "./state"
-  memory_dir: "./memory"
-
-# Agent settings
+# Agent mode (pick one)
 agent:
-  # "claude" = Claude CLI (uses Max/Pro subscription) ← recommended
-  # "codex" = Codex CLI (uses OpenAI subscription)  
-  # "direct" = Anthropic API (requires api_key)
-  # "clawdbot" = Clawdbot CLI (advanced)
-  mode: "claude"
+  mode: "claude"       # Claude CLI (recommended — uses your subscription)
   workspace: "./agent"
+  
+  # Uncomment for other modes:
+  # mode: "codex"     # OpenAI Codex
+  # mode: "direct"    # Anthropic API (set ANTHROPIC_API_KEY env var)
+  # mode: "clawdbot"  # Clawdbot (session persistence + features)
 ```
+
+### WSL Users
+
+If running **mGBA on Windows** and **daemon in WSL**:
+
+```yaml
+emulator:
+  # Find your WSL IP:
+  # > ipconfig (in Windows) → look for "vEthernet (WSL)" IPv4 Address
+  host: "172.28.208.1"  # Replace with your WSL IP
+  port: 8888
+```
+
+### Other Options
+
+See `config.example.yaml` for:
+- Session persistence across daemon restarts
+- Dytto integration (real-world context)
+- Logging and debugging
+- Model overrides (for direct mode)
 
 ## How It Works
 
@@ -167,6 +190,29 @@ clawdbot agent add agentic-emerald \
 ```
 
 This gives you session persistence, multi-agent orchestration, and other Clawdbot features.
+
+## Troubleshooting
+
+### Lua script fails to load in mGBA
+- **Check mGBA version:** Lua scripting requires 0.10.1+
+- **Check ROM:** Only English Gen 3 Emerald is tested
+- **Try direct path:** Some versions need full path to script
+
+### Daemon won't connect to mGBA
+- **Check emulator config:** Edit `config.yaml` — match host/port in mGBA Lua console
+- **WSL users:** If mGBA is on Windows, use your WSL IP (e.g., `192.168.x.x`) in config, not `127.0.0.1`
+- **Firewall:** Allow Python on port 8888 (or your configured port)
+
+### No agent response
+- **Check agent mode:** Run `cat config.yaml | grep "mode:"`
+- **Claude CLI:** Make sure `claude` is in PATH (`which claude`)
+- **Direct API:** Verify `ANTHROPIC_API_KEY` is set (`echo $ANTHROPIC_API_KEY`)
+- **Clawdbot:** Verify agent registered (`clawdbot agent status agentic-emerald`)
+
+### Rewards aren't applying
+- **Check Lua console:** Look for errors like `GM: Invalid moveId`
+- **Check PLAYTHROUGH.md:** The agent should log decisions here
+- **Check daemon logs:** Run daemon with `-v` flag for verbose output
 
 ## Contributing
 
