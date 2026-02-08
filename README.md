@@ -44,9 +44,11 @@ You never see the GM. But you *feel* that something is different.
 - Python 3.10+
 - An Anthropic API key (Claude)
 
-**Two agent modes:**
-- **Direct mode** (default): Calls Anthropic API directly — no other dependencies
-- **Clawdbot mode**: Uses [Clawdbot](https://github.com/clawdbot/clawdbot) for agent management
+**Agent modes (pick one):**
+- **Claude CLI** (recommended): Uses your Claude Code/Max subscription — no API key needed
+- **Codex CLI**: Uses your OpenAI/Codex subscription
+- **Direct**: Calls Anthropic API with your API key
+- **Clawdbot**: Uses [Clawdbot](https://github.com/clawdbot/clawdbot) for advanced features
 
 ### Installation
 
@@ -95,11 +97,11 @@ paths:
 
 # Agent settings
 agent:
-  # "direct" = call Anthropic API directly (recommended)
-  # "clawdbot" = use Clawdbot CLI
-  mode: "direct"
-  model: "claude-sonnet-4-20250514"
-  api_key: "sk-ant-..."  # Or set ANTHROPIC_API_KEY env var
+  # "claude" = Claude CLI (uses Max/Pro subscription) ← recommended
+  # "codex" = Codex CLI (uses OpenAI subscription)  
+  # "direct" = Anthropic API (requires api_key)
+  # "clawdbot" = Clawdbot CLI (advanced)
+  mode: "claude"
   workspace: "./agent"
 
 # Optional: Real-world context (requires Dytto)

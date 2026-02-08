@@ -97,7 +97,9 @@ class PokemonGM:
         self.agent_model = agent_config.get('model', 'claude-sonnet-4-20250514')
         self.api_key = agent_config.get('api_key', os.environ.get('ANTHROPIC_API_KEY', ''))
         
-        # For direct mode, load system prompt from agent files
+        # Load system prompt for non-clawdbot modes
+        agent_workspace = base_path / agent_config.get('workspace', './agent')
+        
         if self.agent_mode == 'direct':
             if not HAS_ANTHROPIC:
                 print("Direct mode requires anthropic package. Install with: pip install anthropic")
@@ -106,8 +108,10 @@ class PokemonGM:
                 print("Direct mode requires api_key in config or ANTHROPIC_API_KEY env var")
                 sys.exit(1)
             self.anthropic_client = anthropic.Anthropic(api_key=self.api_key)
-            self.system_prompt = self._load_system_prompt(base_path / agent_config.get('workspace', './agent'))
+            self.system_prompt = self._load_system_prompt(agent_workspace)
             self.conversation_history = []  # For multi-turn context
+        elif self.agent_mode in ('claude', 'codex'):
+            self.system_prompt = self._load_system_prompt(agent_workspace)
         
         # Session settings
         session_config = config.get('session', {})
@@ -226,7 +230,11 @@ class PokemonGM:
                 
                 if self.agent_mode == 'direct':
                     response_text = self._call_anthropic_direct(prompt)
-                else:
+                elif self.agent_mode == 'claude':
+                    response_text = self._call_claude_cli(prompt)
+                elif self.agent_mode == 'codex':
+                    response_text = self._call_codex_cli(prompt)
+                else:  # clawdbot (default)
                     response_text = self._call_clawdbot(prompt)
                 
                 if response_text:
@@ -305,6 +313,41 @@ class PokemonGM:
         self.response_file.write_text(assistant_message)
         
         return assistant_message
+    
+    def _call_claude_cli(self, prompt: str) -> str:
+        """Call Claude CLI (uses Claude Code/Max subscription via OAuth)"""
+        # Build the full prompt with system context
+        full_prompt = f"{self.system_prompt}\n\n---\n\n{prompt}"
+        
+        result = subprocess.run(
+            ["claude", "-p", full_prompt, "--no-markdown"],
+            capture_output=True, text=True, timeout=120
+        )
+        
+        if result.returncode == 0:
+            response = result.stdout.strip()
+            self.response_file.write_text(response)
+            return response
+        else:
+            self.log(f"⚠️ Claude CLI error: {result.stderr[:100]}")
+            return ""
+    
+    def _call_codex_cli(self, prompt: str) -> str:
+        """Call Codex CLI (uses OpenAI subscription)"""
+        full_prompt = f"{self.system_prompt}\n\n---\n\n{prompt}"
+        
+        result = subprocess.run(
+            ["codex", "-q", full_prompt],
+            capture_output=True, text=True, timeout=120
+        )
+        
+        if result.returncode == 0:
+            response = result.stdout.strip()
+            self.response_file.write_text(response)
+            return response
+        else:
+            self.log(f"⚠️ Codex CLI error: {result.stderr[:100]}")
+            return ""
     
     def build_prompt(self, event_type: str, ctx: dict) -> str:
         """Build context-rich prompt for the agent"""

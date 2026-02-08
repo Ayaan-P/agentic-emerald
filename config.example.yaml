@@ -16,13 +16,17 @@ paths:
 
 # AI Agent settings
 agent:
-  # Mode: "clawdbot" (uses Clawdbot CLI) or "direct" (calls Anthropic API directly)
-  mode: "direct"
+  # Mode options:
+  #   "claude"   - Uses Claude CLI (Claude Code/Max subscription via OAuth) ← RECOMMENDED
+  #   "codex"    - Uses Codex CLI (OpenAI subscription)
+  #   "direct"   - Calls Anthropic API directly (requires api_key)
+  #   "clawdbot" - Uses Clawdbot CLI (advanced features)
+  mode: "claude"
   
   # Agent ID (only used in clawdbot mode)
   id: "pokemon-gm"
   
-  # Model to use
+  # Model to use (for direct mode)
   model: "claude-sonnet-4-20250514"
   
   # API key (only for direct mode - or set ANTHROPIC_API_KEY env var)
