@@ -1,2 +1,7 @@
 # Pokemon GM Python Dependencies
+
+# Required
 pyyaml>=6.0
+
+# For direct mode (calling Anthropic API without Clawdbot)
+anthropic>=0.18.0

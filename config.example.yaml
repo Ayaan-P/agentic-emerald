@@ -16,13 +16,19 @@ paths:
 
 # AI Agent settings
 agent:
-  # Agent ID in Clawdbot
+  # Mode: "clawdbot" (uses Clawdbot CLI) or "direct" (calls Anthropic API directly)
+  mode: "direct"
+  
+  # Agent ID (only used in clawdbot mode)
   id: "pokemon-gm"
   
-  # Model to use (Claude recommended)
-  model: "anthropic/claude-sonnet-4-20250514"
+  # Model to use
+  model: "claude-sonnet-4-20250514"
   
-  # Path to agent workspace (where AGENTS.md lives)
+  # API key (only for direct mode - or set ANTHROPIC_API_KEY env var)
+  api_key: ""
+  
+  # Path to agent workspace (where AGENTS.md, GM_NARRATIVE.md live)
   workspace: "./agent"
 
 # Session behavior

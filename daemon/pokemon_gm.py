@@ -3,6 +3,10 @@
 Pokemon GM Daemon - Event-driven AI Game Master
 Connects to mGBA, observes gameplay, and sends story events to an AI agent
 that decides on invisible interventions.
+
+Supports two modes:
+- clawdbot: Uses Clawdbot CLI for agent management (recommended)
+- direct: Calls Anthropic API directly (no dependencies)
 """
 import socket
 import json
@@ -22,6 +26,13 @@ try:
 except ImportError:
     print("PyYAML required. Install with: pip install pyyaml")
     sys.exit(1)
+
+# Optional: Anthropic SDK for direct mode
+try:
+    import anthropic
+    HAS_ANTHROPIC = True
+except ImportError:
+    HAS_ANTHROPIC = False
 
 
 def load_config(config_path: Path) -> dict:
@@ -82,6 +93,21 @@ class PokemonGM:
         # Agent settings
         agent_config = config.get('agent', {})
         self.agent_id = agent_config.get('id', 'pokemon-gm')
+        self.agent_mode = agent_config.get('mode', 'clawdbot')  # 'clawdbot' or 'direct'
+        self.agent_model = agent_config.get('model', 'claude-sonnet-4-20250514')
+        self.api_key = agent_config.get('api_key', os.environ.get('ANTHROPIC_API_KEY', ''))
+        
+        # For direct mode, load system prompt from agent files
+        if self.agent_mode == 'direct':
+            if not HAS_ANTHROPIC:
+                print("Direct mode requires anthropic package. Install with: pip install anthropic")
+                sys.exit(1)
+            if not self.api_key:
+                print("Direct mode requires api_key in config or ANTHROPIC_API_KEY env var")
+                sys.exit(1)
+            self.anthropic_client = anthropic.Anthropic(api_key=self.api_key)
+            self.system_prompt = self._load_system_prompt(base_path / agent_config.get('workspace', './agent'))
+            self.conversation_history = []  # For multi-turn context
         
         # Session settings
         session_config = config.get('session', {})
@@ -124,6 +150,26 @@ class PokemonGM:
         # Ensure directories exist
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.memory_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _load_system_prompt(self, agent_workspace: Path) -> str:
+        """Load system prompt from agent workspace files (for direct mode)"""
+        prompt_parts = []
+        
+        # Load in order of importance
+        files = ['AGENTS.md', 'GM_NARRATIVE.md', 'GM_INSTRUCTIONS.md']
+        for filename in files:
+            filepath = agent_workspace / filename
+            if filepath.exists():
+                content = filepath.read_text()
+                prompt_parts.append(f"# {filename}\n\n{content}")
+        
+        # Load playthrough memory if exists
+        playthrough = self.memory_dir / 'PLAYTHROUGH.md'
+        if playthrough.exists():
+            content = playthrough.read_text()
+            prompt_parts.append(f"# Current Playthrough Memory\n\n{content}")
+        
+        return "\n\n---\n\n".join(prompt_parts)
     
     def log(self, msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
@@ -178,52 +224,34 @@ class PokemonGM:
                 prompt = self.build_prompt(event_type, context)
                 self.log(f"📨 → Agent: {event_type}")
                 
-                # Clear previous response
-                if self.response_file.exists():
-                    self.response_file.unlink()
-                
-                # Call the agent
-                result = subprocess.run(
-                    ["clawdbot", "agent", "--agent", self.agent_id, 
-                     "--session-id", self.session_id, "--message", prompt],
-                    capture_output=True, text=True, timeout=60
-                )
-                
-                if result.returncode == 0:
-                    # Check for response file
-                    for _ in range(10):
-                        time.sleep(0.1)
-                        if self.response_file.exists():
-                            response_text = self.response_file.read_text().strip()
-                            if response_text:
-                                self.log(f"✅ Agent responded to {event_type}")
-                                action_cmd = None
-                                for line in response_text.split('\n')[:10]:
-                                    if line.strip():
-                                        self.log(f"   🤖 {line[:120]}")
-                                        if line.strip().startswith('ACTION:'):
-                                            action_cmd = line.split('ACTION:', 1)[1].strip()
-                                
-                                # Execute action if present
-                                if action_cmd and action_cmd.lower() != 'none':
-                                    if '| nc ' in action_cmd and ' -w ' not in action_cmd:
-                                        action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')
-                                    self.log(f"   ⚡ Executing: {action_cmd[:80]}")
-                                    try:
-                                        subprocess.run(action_cmd, shell=True, timeout=5)
-                                        self.log(f"   ✅ Action complete")
-                                    except subprocess.TimeoutExpired:
-                                        self.log(f"   ⚠️ Action sent (nc timeout normal)")
-                                    except Exception as e:
-                                        self.log(f"   ❌ Action failed: {e}")
-                                break
-                    else:
-                        self.log(f"✅ Agent completed (no file written)")
+                if self.agent_mode == 'direct':
+                    response_text = self._call_anthropic_direct(prompt)
                 else:
-                    self.log(f"⚠️ Agent error: {result.stderr[:100]}")
+                    response_text = self._call_clawdbot(prompt)
+                
+                if response_text:
+                    self.log(f"✅ Agent responded to {event_type}")
+                    action_cmd = None
+                    for line in response_text.split('\n')[:10]:
+                        if line.strip():
+                            self.log(f"   🤖 {line[:120]}")
+                            if line.strip().startswith('ACTION:'):
+                                action_cmd = line.split('ACTION:', 1)[1].strip()
                     
-            except subprocess.TimeoutExpired:
-                self.log(f"⏱️ Agent timeout on {event_type}")
+                    # Execute action if present
+                    if action_cmd and action_cmd.lower() != 'none':
+                        # Add nc timeout flag if missing
+                        if '| nc ' in action_cmd and ' -w ' not in action_cmd:
+                            action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')
+                        self.log(f"   ⚡ Executing: {action_cmd[:80]}")
+                        try:
+                            subprocess.run(action_cmd, shell=True, timeout=5)
+                            self.log(f"   ✅ Action complete")
+                        except subprocess.TimeoutExpired:
+                            self.log(f"   ⚠️ Action sent (nc timeout normal)")
+                        except Exception as e:
+                            self.log(f"   ❌ Action failed: {e}")
+                    
             except Exception as e:
                 self.log(f"❌ Agent error: {e}")
             finally:
@@ -233,6 +261,50 @@ class PokemonGM:
                     self.prompt_agent_async(next_event, next_ctx)
         
         threading.Thread(target=run_agent, daemon=True).start()
+    
+    def _call_clawdbot(self, prompt: str) -> str:
+        """Call agent via Clawdbot CLI"""
+        # Clear previous response
+        if self.response_file.exists():
+            self.response_file.unlink()
+        
+        result = subprocess.run(
+            ["clawdbot", "agent", "--agent", self.agent_id,
+             "--session-id", self.session_id, "--message", prompt],
+            capture_output=True, text=True, timeout=60
+        )
+        
+        if result.returncode == 0:
+            # Check for response file
+            for _ in range(10):
+                time.sleep(0.1)
+                if self.response_file.exists():
+                    return self.response_file.read_text().strip()
+        return ""
+    
+    def _call_anthropic_direct(self, prompt: str) -> str:
+        """Call Anthropic API directly (no Clawdbot required)"""
+        # Add to conversation history
+        self.conversation_history.append({"role": "user", "content": prompt})
+        
+        # Keep history manageable (last 20 turns)
+        if len(self.conversation_history) > 40:
+            self.conversation_history = self.conversation_history[-40:]
+        
+        response = self.anthropic_client.messages.create(
+            model=self.agent_model,
+            max_tokens=1024,
+            system=self.system_prompt,
+            messages=self.conversation_history
+        )
+        
+        assistant_message = response.content[0].text
+        self.conversation_history.append({"role": "assistant", "content": assistant_message})
+        
+        # Write to response file (for compatibility)
+        self.response_file.write_text(assistant_message)
+        
+        return assistant_message
     
     def build_prompt(self, event_type: str, ctx: dict) -> str:
         """Build context-rich prompt for the agent"""

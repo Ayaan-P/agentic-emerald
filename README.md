@@ -42,8 +42,11 @@ You never see the GM. But you *feel* that something is different.
 
 - [mGBA](https://mgba.io/) emulator with Lua scripting enabled
 - Python 3.10+
-- [Clawdbot](https://github.com/clawdbot/clawdbot) (for AI agent)
 - An Anthropic API key (Claude)
+
+**Two agent modes:**
+- **Direct mode** (default): Calls Anthropic API directly — no other dependencies
+- **Clawdbot mode**: Uses [Clawdbot](https://github.com/clawdbot/clawdbot) for agent management
 
 ### Installation
 
@@ -63,19 +66,8 @@ cp config.example.yaml config.yaml
 ### Setup mGBA
 
 1. Open mGBA → Tools → Scripting
-2. Load `lua/gm_server.lua`
+2. Load `lua/game_master_v2.lua`
 3. The script will start a socket server for the daemon
-
-### Setup the Agent
-
-```bash
-# Add the agent to Clawdbot
-clawdbot agent add pokemon-gm \
-  --model anthropic/claude-sonnet-4-20250514 \
-  --workspace ./agent
-
-# Or manually add to ~/.clawdbot/clawdbot.json
-```
 
 ### Run
 
@@ -103,8 +95,12 @@ paths:
 
 # Agent settings
 agent:
-  id: "pokemon-gm"
-  model: "anthropic/claude-sonnet-4-20250514"
+  # "direct" = call Anthropic API directly (recommended)
+  # "clawdbot" = use Clawdbot CLI
+  mode: "direct"
+  model: "claude-sonnet-4-20250514"
+  api_key: "sk-ant-..."  # Or set ANTHROPIC_API_KEY env var
+  workspace: "./agent"
 
 # Optional: Real-world context (requires Dytto)
 dytto:
@@ -185,15 +181,34 @@ With [Dytto](https://dytto.app), the GM can access real-world context:
 
 Enable in `config.yaml` and add your Dytto API key.
 
+## Clawdbot Mode (Optional)
+
+If you use [Clawdbot](https://github.com/clawdbot/clawdbot), you can use it for agent management:
+
+```yaml
+agent:
+  mode: "clawdbot"
+  id: "pokemon-gm"
+```
+
+```bash
+# Add the agent to Clawdbot
+clawdbot agent add pokemon-gm \
+  --model anthropic/claude-sonnet-4-20250514 \
+  --workspace ./agent
+```
+
+This gives you session persistence, multi-agent orchestration, and other Clawdbot features.
+
 ## Contributing
 
 PRs welcome! Areas that need work:
 
 - [ ] Gen 1 parity (Red/Blue/Yellow)
 - [ ] Gen 4+ support
-- [ ] Non-Clawdbot agent options (direct API)
 - [ ] Web UI for GM settings
 - [ ] "Narrative packs" — different GM personalities
+- [ ] Support for other LLMs (OpenAI, local models)
 
 ## License
 
@@ -201,6 +216,8 @@ MIT
 
 ## Credits
 
-Built by [@ayaan](https://twitter.com/ayaan) with [Clawdbot](https://clawdbot.com).
+Built by [@ayaan](https://twitter.com/ayaan).
 
 The GM philosophy was developed through extensive playtesting of "what would make Pokemon feel alive?"
+
+Optionally integrates with [Clawdbot](https://clawdbot.com) for advanced agent management.
