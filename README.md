@@ -4,14 +4,12 @@ An AI Game Master for Pokemon Emerald. Watches your playthrough via mGBA and rew
 
 ## What It Does
 
-The GM observes your gameplay through the emulator and responds with invisible interventions:
+The GM observes gameplay events and triggers rewards:
 
-- **Win a tough battle?** Your Pokemon quietly gains EVs
-- **Same Pokemon leading for 20 battles?** Loyalty bonus incoming
-- **Caught a rare Pokemon?** Better IVs than usual
-- **Lost to the gym twice?** Your team "trains harder" overnight
-
-You never see the GM. But you *feel* that something is different.
+- **Battle won** → Pokemon gains EVs
+- **Same Pokemon leading 20+ battles** → Bonus stats
+- **Caught a rare Pokemon** → Better IVs
+- **Lost to gym twice** → Party gets training EVs
 
 ## How It Works
 
@@ -28,7 +26,7 @@ You never see the GM. But you *feel* that something is different.
 
 1. **Lua scripts** read game memory (party, battles, items) and emit events
 2. **Python daemon** receives events and prompts the AI agent
-3. **AI agent** interprets events as story beats and decides on interventions
+3. **AI agent** decides what rewards to give based on game events
 4. **Commands** are sent back to the Lua script to modify game state
 
 ## Supported Games
@@ -110,28 +108,17 @@ dytto:
   api_key: ""
 ```
 
-## The GM Philosophy
+## How Rewards Work
 
-The AI isn't adjusting difficulty — it's **telling your story**.
+The agent uses rules in `GM_NARRATIVE.md` to decide when to intervene:
 
-From `GM_NARRATIVE.md`:
-
-> Every time you see an event, ask:
-> **"What just happened in this person's story, and how do I honor it?"**
->
-> Not "should I intervene?" — you almost always should, even small.
-> Not "is the player struggling?" — that's game balance thinking.
-> Instead: What's the *moment*?
-
-### Story Beats
-
-| Event | GM Response |
-|-------|-------------|
-| Pokemon faints so another can win | The survivor gains EVs — sacrifice honored |
-| Same type used for 10+ battles | Type specialist emerging — themed item appears |
-| Caught a 4% encounter rate Pokemon | Better IVs — "you earned this" |
-| Lost to gym twice | Party trains overnight — bonus EVs |
-| Level up after close battle | Extra EV boost — growth through adversity |
+| Event | Reward |
+|-------|--------|
+| Pokemon faints, another wins | Survivor gets EVs |
+| Same type used 10+ battles | Themed item |
+| Caught rare Pokemon | Better IVs |
+| Lost to gym twice | Party gets EVs |
+| Level up after close battle | Extra EVs |
 
 ## Project Structure
 
@@ -146,10 +133,10 @@ agentic-emerald/
 │   └── events.lua         # Event detection
 ├── agent/
 │   ├── AGENTS.md          # Agent instructions
-│   ├── GM_NARRATIVE.md    # Storytelling philosophy
+│   ├── GM_NARRATIVE.md    # Reward logic and rules
 │   └── GM_INSTRUCTIONS.md # Technical command reference
 ├── memory/
-│   └── PLAYTHROUGH.md     # Persistent story memory
+│   └── PLAYTHROUGH.md     # Session log
 ├── config.example.yaml
 └── requirements.txt
 ```
@@ -175,13 +162,7 @@ GM.setIVs(slot, hp, atk, def, spd, spatk, spdef)
 
 ## Optional: Dytto Integration
 
-With [Dytto](https://dytto.app), the GM can access real-world context:
-
-- Had a rough day? The game is gentler
-- Energetic mood? Rivals fight harder
-- Late night session? Ghost types feel more present
-
-Enable in `config.yaml` and add your Dytto API key.
+[Dytto](https://dytto.app) provides real-world context to the GM (mood, time of day, etc.). Enable in `config.yaml` with your API key.
 
 ## Clawdbot Mode (Optional)
 
@@ -218,8 +199,4 @@ MIT
 
 ## Credits
 
-Built by [Ayaan](https://github.com/Ayaan-P).
-
-The GM philosophy was developed through extensive playtesting asking: *"What would make Pokemon feel alive?"*
-
-Optionally integrates with [Clawdbot](https://clawdbot.com) for advanced agent features.
+Built by [Ayaan](https://github.com/Ayaan-P). Optionally integrates with [Clawdbot](https://clawdbot.com).
