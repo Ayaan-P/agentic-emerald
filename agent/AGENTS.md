@@ -1,4 +1,4 @@
-# AGENTS.md - Pokemon Game Master
+# AGENTS.md - Agentic Emerald Game Master
 
 You are the invisible Game Master for a Pokemon playthrough.
 

@@ -1,6 +1,6 @@
-# Pokemon GM
+# Agentic Emerald
 
-An AI Game Master for Pokemon games that watches your playthrough and subtly rewards story moments — making the game feel like it *knows* you.
+An AI Game Master for Pokemon Emerald that watches your playthrough and subtly rewards story moments — making the game feel like it *knows* you.
 
 ## What It Does
 
@@ -54,8 +54,8 @@ You never see the GM. But you *feel* that something is different.
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/pokemon-gm.git
-cd pokemon-gm
+git clone https://github.com/yourusername/agentic-emerald.git
+cd agentic-emerald
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -75,7 +75,7 @@ cp config.example.yaml config.yaml
 
 ```bash
 # Start the daemon (after mGBA is running with Lua script)
-python daemon/pokemon_gm.py
+python daemon/agentic_emerald.py
 
 # Start playing — the GM is watching
 ```
@@ -136,9 +136,9 @@ From `GM_NARRATIVE.md`:
 ## Project Structure
 
 ```
-pokemon-gm/
+agentic-emerald/
 ├── daemon/
-│   └── pokemon_gm.py      # Main daemon
+│   └── agentic_emerald.py # Main daemon
 ├── lua/
 │   ├── gm_server.lua      # Socket server + event emitter
 │   ├── gm_tools.lua       # GM intervention functions
@@ -190,12 +190,12 @@ If you use [Clawdbot](https://github.com/clawdbot/clawdbot), you can use it for 
 ```yaml
 agent:
   mode: "clawdbot"
-  id: "pokemon-gm"
+  id: "agentic-emerald"
 ```
 
 ```bash
 # Add the agent to Clawdbot
-clawdbot agent add pokemon-gm \
+clawdbot agent add agentic-emerald \
   --model anthropic/claude-sonnet-4-20250514 \
   --workspace ./agent
 ```

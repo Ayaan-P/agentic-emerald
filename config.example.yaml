@@ -24,7 +24,7 @@ agent:
   mode: "claude"
   
   # Agent ID (only used in clawdbot mode)
-  id: "pokemon-gm"
+  id: "agentic-emerald"
   
   # Model to use (for direct mode)
   model: "claude-sonnet-4-20250514"

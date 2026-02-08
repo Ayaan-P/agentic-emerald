@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pokemon GM Daemon - Event-driven AI Game Master
+Agentic Emerald Daemon - Event-driven AI Game Master
 Connects to mGBA, observes gameplay, and sends story events to an AI agent
 that decides on invisible interventions.
 
@@ -497,7 +497,7 @@ class PokemonGM:
     
     def run(self):
         """Main event loop"""
-        self.log("🎮 Pokemon GM Daemon starting...")
+        self.log("🎮 Agentic Emerald Daemon starting...")
         
         while True:
             if not self.connected:
@@ -530,7 +530,7 @@ class PokemonGM:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Pokemon GM Daemon")
+    parser = argparse.ArgumentParser(description="Agentic Emerald Daemon")
     parser.add_argument('-c', '--config', default='config.yaml',
                         help='Path to config file (default: config.yaml)')
     args = parser.parse_args()
