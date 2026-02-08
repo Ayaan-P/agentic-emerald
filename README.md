@@ -105,13 +105,9 @@ agent:
 
 ## How It Works
 
-The agent builds a model of who you are as a trainer across the entire playthrough. It writes to `PLAYTHROUGH.md` — not a log, but its running understanding of your playstyle, patterns, and identity.
+It's a game master. Like a DM in D&D, but for Pokemon.
 
-- Always lead with the same Pokemon? The agent notices that bond.
-- Keep using Fire types? You're becoming a Fire specialist.
-- Grinding for an hour? Different player than someone rushing through.
-
-The game world responds to who you're *becoming*, not just what you did in the last battle. The LLM uses its own judgment — no hardcoded rules.
+The agent watches the game, tracks what's happening in `PLAYTHROUGH.md`, and decides when/how to intervene. No hardcoded rules — the LLM uses judgment based on the full context of your playthrough.
 
 ## Project Structure
 
