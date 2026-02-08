@@ -1,0 +1,2 @@
+# Pokemon GM Python Dependencies
+pyyaml>=6.0

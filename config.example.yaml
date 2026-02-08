@@ -1,0 +1,53 @@
+# Pokemon GM Configuration
+
+# Connection to mGBA Lua server
+emulator:
+  # Host IP where mGBA is running
+  # - Use "127.0.0.1" if running on same machine
+  # - Use your Windows IP if running daemon in WSL (e.g., "172.28.208.1")
+  host: "127.0.0.1"
+  port: 8888
+
+# File paths (relative to this config file)
+paths:
+  state_dir: "./state"
+  memory_dir: "./memory"
+  species_file: "./data/emerald_species.json"
+
+# AI Agent settings
+agent:
+  # Agent ID in Clawdbot
+  id: "pokemon-gm"
+  
+  # Model to use (Claude recommended)
+  model: "anthropic/claude-sonnet-4-20250514"
+  
+  # Path to agent workspace (where AGENTS.md lives)
+  workspace: "./agent"
+
+# Session behavior
+session:
+  # Keep same session across daemon restarts?
+  # If true, agent remembers previous events
+  # If false, fresh start each time
+  persistent: false
+  
+  # Session ID file (only used if persistent: true)
+  session_file: "./state/session_id.txt"
+
+# Optional: Real-world context via Dytto
+# Lets the GM respond to your actual mood/energy
+dytto:
+  enabled: false
+  # Get your API key from https://dytto.app
+  api_key: ""
+  # Path to dytto CLI script (if using local script)
+  script_path: ""
+
+# Logging
+logging:
+  # Show debug output
+  verbose: false
+  
+  # Log events to file
+  log_file: "./state/events.jsonl"

@@ -1,0 +1,27 @@
+# Config (contains local paths)
+config.yaml
+
+# State files
+state/
+memory/*.md
+!memory/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ROMs (don't commit)
+*.gba
+*.sav
+*.gb
+*.gbc
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
