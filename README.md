@@ -1,16 +1,6 @@
-# Agentic Emerald 🎮✨
+# Agentic Emerald
 
-**An invisible AI Game Master for Pokemon Emerald.**
-
-The GM watches your playthrough and subtly rewards story moments. You never see it, but you *feel* that the game knows you.
-
-> "My Combusken learned the exact move I needed after that clutch battle..."
-> 
-> "Every time I lose, I somehow come back stronger..."
-> 
-> "This Ralts I caught is weirdly good..."
-
-That's the GM. That's your story being told.
+An AI Game Master for Pokemon Emerald. Watches your playthrough via mGBA and rewards story moments with invisible interventions (EVs, moves, items).
 
 ## What It Does
 
