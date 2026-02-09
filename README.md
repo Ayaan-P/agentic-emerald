@@ -134,10 +134,38 @@ When enabled, the daemon will:
 
 This is especially useful for long playthroughs where you want the agent to remember all the decisions it's made.
 
+### Real-World Context (Dytto)
+
+Optionally, the GM can access your real-world context via **Dytto**. This lets the game adapt based on your mood, energy level, location, and recent life events.
+
+**Setup:**
+
+1. Install Dytto (if available): `pip install dytto`
+2. Enable in config:
+
+```yaml
+dytto:
+  enabled: true
+  api_key: "your-dytto-api-key"  # Get from https://dytto.ai
+```
+
+**How the GM Uses It:**
+
+The agent checks your context at key moments (gym battles, long sessions, story beats) and adapts accordingly:
+
+| Your Real-World State | Game Adaptation |
+|---------------------|-----------------|
+| You're stressed/tired | Gym leader is slightly gentler, items appear to help |
+| You're energetic | Rival gets sharper, battles are more challenging |
+| It's late at night | Darker themes, ghost Pokemon are more present |
+| You just had a win IRL | Lucky encounters, rare Pokemon appear |
+| You're grinding hard | Bonus EVs across the board, Rare Candy appears |
+
+The GM uses this **sparingly** — only at important moments, never to spam context. The goal: the game feels like it *knows* you, not just your save file.
+
 ### Other Options
 
 See `config.example.yaml` for:
-- Dytto integration (real-world context)
 - Logging and debugging
 - Model overrides (for direct mode)
 
