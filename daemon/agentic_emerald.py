@@ -131,6 +131,13 @@ class PokemonGM:
         self.dytto_enabled = dytto_config.get('enabled', False)
         self.dytto_script = dytto_config.get('script_path', '')
         
+        # Session persistence settings
+        session_config = config.get('session', {})
+        self.session_persistent = session_config.get('persistent', False)
+        self.session_file = base_path / session_config.get('session_file', './state/session_id.txt')
+        self.session_history_file = self.state_dir / 'session.json'
+        self.session_history = []
+        
         # Runtime state
         self.sock = None
         self.connected = False
@@ -154,6 +161,10 @@ class PokemonGM:
         # Ensure directories exist
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.memory_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Load session history if persistent mode is enabled
+        if self.session_persistent:
+            self._load_session_history()
     
     def _load_system_prompt(self, agent_workspace: Path) -> str:
         """Load system prompt from agent workspace files (for direct mode)"""
@@ -174,6 +185,50 @@ class PokemonGM:
             prompt_parts.append(f"# Current Playthrough Memory\n\n{content}")
         
         return "\n\n---\n\n".join(prompt_parts)
+    
+    def _load_session_history(self):
+        """Load previous session history from file if it exists"""
+        if self.session_history_file.exists():
+            try:
+                with open(self.session_history_file) as f:
+                    data = json.load(f)
+                    self.session_history = data.get('history', [])
+                    self.log(f"📜 Loaded {len(self.session_history)} previous session events")
+            except Exception as e:
+                self.log(f"⚠️ Failed to load session history: {e}")
+                self.session_history = []
+        else:
+            self.log("📝 Starting new session")
+    
+    def _save_session_history(self):
+        """Save session history to file for next run"""
+        if self.session_persistent:
+            try:
+                session_data = {
+                    'started_at': datetime.fromtimestamp(self.session_start).isoformat(),
+                    'history': self.session_history,
+                    'stats': {
+                        'battles_won': self.battles_won,
+                        'pokemon_caught': self.pokemon_caught,
+                        'close_calls': self.close_calls
+                    }
+                }
+                with open(self.session_history_file, 'w') as f:
+                    json.dump(session_data, f, indent=2)
+            except Exception as e:
+                self.log(f"⚠️ Failed to save session history: {e}")
+    
+    def _add_to_session_history(self, event_type: str, agent_prompt: str, agent_response: str):
+        """Record an agent interaction in session history"""
+        if self.session_persistent:
+            self.session_history.append({
+                'timestamp': datetime.now().isoformat(),
+                'event_type': event_type,
+                'prompt': agent_prompt,
+                'response': agent_response
+            })
+            # Save after each interaction
+            self._save_session_history()
     
     def log(self, msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
@@ -239,6 +294,9 @@ class PokemonGM:
                 
                 if response_text:
                     self.log(f"✅ Agent responded to {event_type}")
+                    # Save to session history if persistent
+                    self._add_to_session_history(event_type, prompt, response_text)
+                    
                     action_cmd = None
                     for line in response_text.split('\n')[:10]:
                         if line.strip():
@@ -393,6 +451,14 @@ class PokemonGM:
             summary = ctx.get('summary', '')
             prompt += f"=== EXPLORATION ===\n{summary}\n"
         
+        # Add session history context if available
+        if self.session_persistent and self.session_history:
+            prompt += f"\n=== SESSION HISTORY ({len(self.session_history)} previous events) ===\n"
+            # Include last 5 interactions to keep context window manageable
+            for entry in self.session_history[-5:]:
+                prompt += f"• [{entry.get('event_type', 'unknown')}] {entry.get('response', '')[:100]}\n"
+            prompt += "\nRemember the context from these previous events when making decisions.\n"
+        
         return prompt
     
     def process_event(self, data: dict):
@@ -402,21 +468,33 @@ class PokemonGM:
         if event_type == 'battle_start':
             enemy = data.get('enemy', {})
             enemy_name = self.get_species_name(enemy.get('species', 0))
-            is_trainer = data.get('battleInfo', {}).get('is_trainer', False)
+            battle_info = data.get('battleInfo', {})
+            is_trainer = battle_info.get('is_trainer', False)
+            is_double = battle_info.get('is_double', False)
             
             self.in_battle = True
             self.battle_start_time = time.time()
+            
+            battle_type = 'TRAINER' if is_trainer else 'WILD'
+            if is_double:
+                battle_type += ' (DOUBLE)'
+            
             self.battle_buffer = [{
                 'event': 'START',
-                'type': 'TRAINER' if is_trainer else 'WILD',
-                'enemy': f"{enemy_name} L{enemy.get('level', '?')}"
+                'type': battle_type,
+                'enemy': f"{enemy_name} L{enemy.get('level', '?')}",
+                'is_double': is_double,
+                'is_trainer': is_trainer
             }]
             
             party = data.get('party', [])
             self.battle_start_hp = {i: p.get('current_hp', 0) for i, p in enumerate(party)}
             self.battle_start_levels = {i: p.get('level', 0) for i, p in enumerate(party)}
             
-            self.log(f"⚔️ BATTLE START: vs {enemy_name}")
+            battle_log = f"⚔️ BATTLE START: vs {enemy_name}"
+            if is_double:
+                battle_log += " [DOUBLE BATTLE]"
+            self.log(battle_log)
             
         elif event_type == 'battle_end':
             outcome = data.get('outcome', 0)
