@@ -118,10 +118,25 @@ emulator:
   port: 8888
 ```
 
+### Session Persistence
+
+By default, the daemon starts fresh each time. You can enable **session persistence** so the agent remembers the full playthrough context even if the daemon restarts:
+
+```yaml
+session:
+  persistent: true  # Enable session history across restarts
+```
+
+When enabled, the daemon will:
+- Load previous session events on startup
+- Include context from the last 5 interactions in agent prompts
+- Automatically save session history to `state/session.json`
+
+This is especially useful for long playthroughs where you want the agent to remember all the decisions it's made.
+
 ### Other Options
 
 See `config.example.yaml` for:
-- Session persistence across daemon restarts
 - Dytto integration (real-world context)
 - Logging and debugging
 - Model overrides (for direct mode)

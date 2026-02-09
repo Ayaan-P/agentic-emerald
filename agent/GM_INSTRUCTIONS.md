@@ -118,6 +118,18 @@ echo 'GM.setEnemyLevel(1, 25)' | nc 172.28.208.1 8888
 - 17: Potion, 25: Hyper Potion, 23: Full Restore
 - 68: Rare Candy, 28: Revive, 29: Max Revive
 
+## Battle Types
+
+The daemon sends the battle type in each BATTLE_SUMMARY event:
+- **WILD** — Random encounter (usually ignore, or use for training/EV prep)
+- **TRAINER** — Named NPC, important for story
+- **TRAINER (DOUBLE)** — 2v2 double battle (rarer, more challenging)
+
+For double battles, consider:
+- They're harder — player is using more Pokemon
+- It's a test of team synergy and strategy
+- Reward strategic thinking (synergy moves, coverage)
+
 ## Remember
 - Log decisions to memory/PLAYTHROUGH.md
 - Track what the player struggles with
