@@ -122,6 +122,7 @@ echo 'GM.setEnemyLevel(1, 25)' | nc 172.28.208.1 8888
 
 The daemon sends the battle type in each BATTLE_SUMMARY event:
 - **WILD** — Random encounter (usually ignore, or use for training/EV prep)
+- **WILD (SAFARI)** — Safari Zone encounter (limited balls, no capture, just for pokedex/EV)
 - **TRAINER** — Named NPC, important for story
 - **TRAINER (DOUBLE)** — 2v2 double battle (rarer, more challenging)
 
@@ -129,6 +130,12 @@ For double battles, consider:
 - They're harder — player is using more Pokemon
 - It's a test of team synergy and strategy
 - Reward strategic thinking (synergy moves, coverage)
+
+For Safari Zone battles, remember:
+- Player can't capture (Safari balls only)
+- It's a training zone, just for leveling and EV prep
+- Don't intervene — let player manage ball usage
+- Rare Pokemon should feel special (higher stats, good nature)
 
 ## Remember
 - Log decisions to memory/PLAYTHROUGH.md

@@ -84,6 +84,21 @@ Events.BATTLE_OUTCOMES = {
     [10] = "mon_teleported",
 }
 
+-- Safari Zone maps (Hoenn)
+-- Routes 121-123 and the Safari Zone building
+Events.SAFARI_ZONE_MAPS = {
+    ["15,4"] = "Route 121",     -- Entrance area
+    ["15,5"] = "Route 122",     -- Main area
+    ["15,3"] = "Route 123",     -- Exit area
+    ["16,2"] = "Safari Zone",   -- Building interior
+}
+
+-- Function to detect if current map is Safari Zone
+function Events.isSafariZone()
+    local mapKey = Events.getMapKey()
+    return Events.SAFARI_ZONE_MAPS[mapKey] ~= nil
+end
+
 -- ============================================================================
 -- TRACKED STATE (for change detection)
 -- ============================================================================
@@ -224,6 +239,7 @@ function Events.getBattleInfo()
         is_wild = (flags & 0x04) ~= 0,
         is_trainer = (flags & 0x08) ~= 0,
         is_double = (flags & 0x01) ~= 0,
+        is_safari = Events.isSafariZone(),
         flags = flags,
     }
 end

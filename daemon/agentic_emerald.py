@@ -471,6 +471,7 @@ class PokemonGM:
             battle_info = data.get('battleInfo', {})
             is_trainer = battle_info.get('is_trainer', False)
             is_double = battle_info.get('is_double', False)
+            is_safari = battle_info.get('is_safari', False)
             
             self.in_battle = True
             self.battle_start_time = time.time()
@@ -478,13 +479,16 @@ class PokemonGM:
             battle_type = 'TRAINER' if is_trainer else 'WILD'
             if is_double:
                 battle_type += ' (DOUBLE)'
+            if is_safari:
+                battle_type += ' (SAFARI)'
             
             self.battle_buffer = [{
                 'event': 'START',
                 'type': battle_type,
                 'enemy': f"{enemy_name} L{enemy.get('level', '?')}",
                 'is_double': is_double,
-                'is_trainer': is_trainer
+                'is_trainer': is_trainer,
+                'is_safari': is_safari
             }]
             
             party = data.get('party', [])
@@ -494,6 +498,8 @@ class PokemonGM:
             battle_log = f"⚔️ BATTLE START: vs {enemy_name}"
             if is_double:
                 battle_log += " [DOUBLE BATTLE]"
+            if is_safari:
+                battle_log += " [SAFARI ZONE]"
             self.log(battle_log)
             
         elif event_type == 'battle_end':
