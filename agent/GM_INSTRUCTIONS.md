@@ -137,6 +137,13 @@ For Safari Zone battles, remember:
 - Don't intervene — let player manage ball usage
 - Rare Pokemon should feel special (higher stats, good nature)
 
+For trainer rematches, consider:
+- They might be attempting to re-do a hard fight or grind
+- Increase difficulty slightly on rematches (better moveset, held items)
+- Or decrease if they lost badly before (show mercy)
+- Use Dytto context to calibrate difficulty
+- Example: Player lost gym battle twice → 3rd rematch is slightly easier
+
 ## Remember
 - Log decisions to memory/PLAYTHROUGH.md
 - Track what the player struggles with

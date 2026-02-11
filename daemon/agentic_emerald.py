@@ -157,6 +157,7 @@ class PokemonGM:
         self.battle_start_time = None
         self.battle_start_hp = {}
         self.battle_start_levels = {}
+        self.trainer_encounters = {}  # Track trainer battles for rematch detection {enemy_species_level: [timestamps]}
         
         # Ensure directories exist
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -269,6 +270,29 @@ class PokemonGM:
         event = {"time": datetime.now().isoformat(), "type": event_type, **data}
         with open(self.events_file, 'a') as f:
             f.write(json.dumps(event) + "\n")
+    
+    def detect_trainer_rematch(self, enemy_species: int, enemy_level: int) -> bool:
+        """
+        Detect if this trainer battle is likely a rematch.
+        Uses heuristic: if same species+level encountered before within 30 minutes, it's a rematch.
+        """
+        key = f"{enemy_species}_{enemy_level}"
+        now = time.time()
+        
+        if key not in self.trainer_encounters:
+            self.trainer_encounters[key] = []
+        
+        # Find previous encounters within 30 minutes
+        recent_encounters = [t for t in self.trainer_encounters[key] if now - t < 1800]  # 30 min
+        is_rematch = len(recent_encounters) > 0
+        
+        # Record this encounter
+        self.trainer_encounters[key].append(now)
+        
+        # Cleanup old encounters (keep last 10)
+        self.trainer_encounters[key] = self.trainer_encounters[key][-10:]
+        
+        return is_rematch
     
     def prompt_agent_async(self, event_type: str, context: dict):
         """Send event to AI agent in background thread"""
@@ -472,6 +496,13 @@ class PokemonGM:
             is_trainer = battle_info.get('is_trainer', False)
             is_double = battle_info.get('is_double', False)
             is_safari = battle_info.get('is_safari', False)
+            is_rematch = False
+            
+            # Check for trainer rematch
+            if is_trainer:
+                enemy_species = enemy.get('species', 0)
+                enemy_level = enemy.get('level', 0)
+                is_rematch = self.detect_trainer_rematch(enemy_species, enemy_level)
             
             self.in_battle = True
             self.battle_start_time = time.time()
@@ -481,6 +512,8 @@ class PokemonGM:
                 battle_type += ' (DOUBLE)'
             if is_safari:
                 battle_type += ' (SAFARI)'
+            if is_rematch:
+                battle_type += ' (REMATCH)'
             
             self.battle_buffer = [{
                 'event': 'START',
@@ -488,7 +521,8 @@ class PokemonGM:
                 'enemy': f"{enemy_name} L{enemy.get('level', '?')}",
                 'is_double': is_double,
                 'is_trainer': is_trainer,
-                'is_safari': is_safari
+                'is_safari': is_safari,
+                'is_rematch': is_rematch
             }]
             
             party = data.get('party', [])
