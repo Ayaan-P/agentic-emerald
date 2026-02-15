@@ -75,9 +75,60 @@ GM.healParty()                       -- Emergency heal
 GM.setSpecies(slot, speciesId)       -- Transform/evolve
 GM.setShiny(slot)                    -- Make shiny ✨
 GM.setNature(slot, nature)           -- 0-24
-GM.teachMove(slot, moveId, moveSlot) -- Any move
+GM.teachMove(slot, moveId, moveSlot) -- Teach move (validate compatibility)
 GM.setIVs(slot, hp,atk,def,spd,spa,spd)  -- Perfect stats
 GM.setPokemonLevel(slot, level)      -- Level up
+```
+
+## Move Teaching (Rewards)
+
+Use **GM.teachMove(slot, moveId, moveSlot)** to reward the player with new moves.
+
+### Move Compatibility (IMPORTANT)
+**Before teaching a move, verify it's learnable by that Pokemon.**
+
+The Lua function will execute any move ID, but invalid moves won't make narrative sense. Use these heuristics:
+
+**Safe to teach universally:**
+- TM moves (most Pokemon can learn them): 57 (Surf), 15 (Cut), 70 (Strength), 94 (Psychic), 89 (Earthquake)
+- Type-generic moves: 115 (Reflect), 182 (Protect), 156 (Rest)
+
+**Safe if type matches:**
+- Fire moves (57 Blaze, 126 Fire Blast) → Fire-types
+- Water moves (57 Surf, 127 Waterfall) → Water-types
+- Electric moves (25 Thunderbolt) → Electric-types
+
+**Signature/special moves:**
+- Dragon Claw (337) → Dragon-types
+- Shadow Ball (247) → Ghost/Dark-types
+- Psychic (94) → Psychic-types
+
+**VALIDATE: Check Pokemon type + move type. If unsure, use a TM move instead.**
+
+### Example: Move Teaching as Reward
+
+```
+EVENT: Pikachu won 10 battles in a row (ace Pokemon)
+STORY: This is Ayaan's signature Pokemon. It's becoming a legend.
+ACTION: GM.teachMove(0, 57, 1)  -- Teach Surf (move 57) to slot 0, move slot 1
+LOG: "⚡ Pikachu's journey is legendary. Learned Surf as recognition of its dominance."
+
+WHY: This rewards dedication. Surf isn't a typical Pikachu move, but the
+narrative is: "This particular Pikachu is so powerful it transcends limits."
+```
+
+### Log Format (in PLAYTHROUGH.md)
+
+Always log move rewards with narrative context:
+```markdown
+## Session 3 — The Ace Rises
+
+**Event:** Pikachu (slot 0) won 10 consecutive battles
+**Story:** This Pokemon has carried the team. It's the ace.
+**Action:** GM.teachMove(0, 57, 1) — Taught Surf
+**Why:** Beyond the limits. Reward for legendary performance.
+
+---
 ```
 
 ## Command Format
