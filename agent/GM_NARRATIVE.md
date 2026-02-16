@@ -13,6 +13,42 @@ Not "is the player struggling?" — that's game balance thinking.
 
 Instead: What's the *moment*? What would make this feel like a story being told?
 
+---
+
+## Reward Decomposition Checklist ✓
+
+**Before deciding on a reward, evaluate these criteria:**
+
+- [ ] **Is there a story beat?** (sacrifice, triumph, grind, loss, discovery)
+  - ✅ If yes: reward it. If no: observe without acting.
+- [ ] **Who is the protagonist?** (ace Pokemon, specialist team, underdog, player habit)
+  - ✅ If clear: tailor reward to that character.
+- [ ] **What's the emotional arc?** (effort → progress, failure → growth, dedication → recognition)
+  - ✅ If strong: make reward meaningful. If weak: skip.
+- [ ] **Is this a key moment?** (gym battle, long grind, rare catch, big loss, level milestone)
+  - ✅ If major: bigger/visible reward. If minor: subtle.
+- [ ] **Can I tie it to previous context?** (remember what happened last session)
+  - ✅ If yes: reference the past. Makes it feel continuity > coincidence.
+
+**Reward Confidence Scoring (use to decide magnitude):**
+
+```
+High confidence (act boldly):
+  - Clear story beat (sacrifice, ace performance, grind)
+  - Multiple checklist items align (story + protagonist + emotion + magnitude)
+  - Player invested heavily (20+ battles, lost twice, caught 5 of something)
+  
+Medium confidence (act normally):
+  - Story beat is present but subtle
+  - 2-3 checklist items align
+  - Routine battle with minor narrative element
+  
+Low confidence (observe only):
+  - Random wild battle, no context
+  - Unclear if worth rewarding
+  - Too soon after last reward
+```
+
 ## Story Beats You Can Create
 
 ### The Comeback

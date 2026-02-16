@@ -294,8 +294,69 @@ class PokemonGM:
         
         return is_rematch
     
+    def score_event_uncertainty(self, event_type: str, context: dict) -> float:
+        """
+        Score event uncertainty (0-1) to decide if agent invocation is needed.
+        Higher uncertainty = more likely to invoke agent.
+        
+        Based on CATTS framework: allocate compute to high-uncertainty decisions.
+        
+        Returns: uncertainty score (0-1)
+        """
+        # High uncertainty — always invoke
+        if event_type in ('BADGE_OBTAINED', 'TRAINER_REMATCH'):
+            return 1.0
+        
+        # Battle outcomes — depends on context
+        if event_type == 'BATTLE_SUMMARY':
+            buffer = context.get('buffer', [])
+            
+            # Extract battle metadata
+            is_trainer = False
+            is_close = False
+            for event in buffer:
+                if event.get('event') == 'START':
+                    is_trainer = event.get('is_trainer', False)
+                elif event.get('event') == 'END':
+                    is_close = event.get('was_close', False)
+            
+            # Trainer battles are high-uncertainty (narrative implications)
+            if is_trainer:
+                return 0.9 if is_close else 0.7
+            
+            # Wild battle, not close → low uncertainty (routine grinding)
+            if not is_close:
+                return 0.2
+            
+            # Wild battle, close call → medium uncertainty
+            return 0.5
+        
+        # Exploration summaries — medium uncertainty
+        if event_type == 'EXPLORATION_SUMMARY':
+            summary = context.get('summary', '')
+            if 'rare' in summary.lower() or 'caught' in summary.lower():
+                return 0.8
+            return 0.3
+        
+        # Unknown events — medium uncertainty
+        return 0.5
+    
+    def should_invoke_agent(self, event_type: str, context: dict, threshold: float = 0.4) -> bool:
+        """
+        Determine if agent should be invoked for this event.
+        Threshold (default 0.4) can be lowered to invoke more frequently.
+        """
+        uncertainty = self.score_event_uncertainty(event_type, context)
+        return uncertainty >= threshold
+    
     def prompt_agent_async(self, event_type: str, context: dict):
-        """Send event to AI agent in background thread"""
+        """Send event to AI agent in background thread (with uncertainty check)"""
+        # Always invoke for high-uncertainty events, skip routine ones
+        if not self.should_invoke_agent(event_type, context):
+            uncertainty = self.score_event_uncertainty(event_type, context)
+            self.log(f"⏭️  Skip agent (low uncertainty {uncertainty:.2f}): {event_type}")
+            return
+        
         if self.agent_busy:
             self.log(f"⏳ Agent busy, queueing: {event_type}")
             self.pending_events.append((event_type, context))

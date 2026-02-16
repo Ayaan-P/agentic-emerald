@@ -85,25 +85,33 @@ GM.setPokemonLevel(slot, level)      -- Level up
 Use **GM.teachMove(slot, moveId, moveSlot)** to reward the player with new moves.
 
 ### Move Compatibility (IMPORTANT)
-**Before teaching a move, verify it's learnable by that Pokemon.**
+**Before teaching a move, the Lua script now validates move compatibility automatically.**
 
-The Lua function will execute any move ID, but invalid moves won't make narrative sense. Use these heuristics:
+**How it works:**
+- The Lua script maintains a MOVE_COMPAT database of learnable moves per species
+- When you call `GM.teachMove(slot, moveId, moveSlot)`, it checks if the move is learnable
+- If the move is unknown or incompatible, you'll see a warning in the Lua console
+- Warnings are informational — the move still gets taught, but you'll know it might be unusual
 
-**Safe to teach universally:**
-- TM moves (most Pokemon can learn them): 57 (Surf), 15 (Cut), 70 (Strength), 94 (Psychic), 89 (Earthquake)
-- Type-generic moves: 115 (Reflect), 182 (Protect), 156 (Rest)
+**Universal moves (safe for any Pokemon):**
+- TM moves: 57 (Surf), 15 (Cut), 70 (Strength), 94 (Psychic), 89 (Earthquake)
+- Type-generic: 115 (Reflect), 182 (Protect), 156 (Rest), 163 (Slash), 14 (Swords Dance)
 
-**Safe if type matches:**
-- Fire moves (57 Blaze, 126 Fire Blast) → Fire-types
-- Water moves (57 Surf, 127 Waterfall) → Water-types
-- Electric moves (25 Thunderbolt) → Electric-types
+**Type-specific moves (safe if type matches):**
+- Fire: 52 (Ember), 126 (Fire Blast), 172 (Flame Wheel)
+- Water: 57 (Surf), 127 (Waterfall)
+- Psychic: 94 (Psychic)
+- Dragon: 337 (Dragon Claw)
+- Dark/Ghost: 247 (Shadow Ball)
 
-**Signature/special moves:**
-- Dragon Claw (337) → Dragon-types
-- Shadow Ball (247) → Ghost/Dark-types
-- Psychic (94) → Psychic-types
+**If unsure, stick to universal moves** (57, 15, 70, 94, 89, 115).
 
-**VALIDATE: Check Pokemon type + move type. If unsure, use a TM move instead.**
+**Example:**
+```
+GM.teachMove(0, 57, 1)  -- Teach Surf (move 57) to slot 0, move slot 1
+-- Console output: "✅ Move check: Surf is universal learnable" (if Blaziken)
+--          or: "⚠️  Warning: Move #X may not be learnable by Pokemon #Y" (if unusual)
+```
 
 ### Example: Move Teaching as Reward
 

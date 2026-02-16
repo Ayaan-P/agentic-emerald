@@ -50,6 +50,79 @@ local GBATTLEMONS_ADDR = 0x02024084
 local BATTLE_MON_SIZE = 88
 
 -- =============================================================================
+-- MOVE COMPATIBILITY DATABASE
+-- Maps species to learnable moves (for validation during teachMove)
+-- =============================================================================
+
+local MOVE_COMPAT = {
+    -- Fire types (move 57 = Surf is NOT compatible, but 52 = Ember is)
+    [252] = { 15, 33, 52, 126, 163 },  -- Treecko: Cut, Tackle, Ember... (type-neutral + Grass)
+    [255] = { 15, 33, 52, 126, 172 },  -- Torchic: Cut, Tackle, Ember, Fire Blast, Flame Wheel
+    [256] = { 15, 33, 52, 126, 172 },  -- Combusken: similar
+    [257] = { 15, 33, 52, 126, 172, 57 },  -- Blaziken: + Surf (egg move potential)
+    
+    -- Water types
+    [258] = { 15, 33, 57, 127 },  -- Mudkip: Waterfall, Surf, etc.
+    [259] = { 15, 33, 57, 127 },  -- Marshtomp
+    [260] = { 15, 33, 57, 127, 94 },  -- Swampert: + Psychic (egg)
+    
+    -- Psychic types
+    [280] = { 94, 115, 156 },  -- Ralts: Psychic, Reflect, Rest
+    [281] = { 94, 115, 156 },  -- Kirlia
+    [282] = { 94, 115, 156 },  -- Gardevoir
+    
+    -- Dragon types
+    [371] = { 89, 337 },  -- Bagon: Earthquake, Dragon Claw
+    [372] = { 89, 337 },  -- Shelgon
+    [373] = { 89, 337, 57 },  -- Salamence: + Surf (rare)
+    
+    -- Steel types
+    [304] = { 89, 70 },  -- Aron: Earthquake, Strength
+    [305] = { 89, 70 },  -- Lairon
+    [306] = { 89, 70, 337 },  -- Aggron: Dragon Claw (egg)
+    
+    -- Universal safe moves (any type can learn)
+    [0] = { 57, 15, 70, 94, 89, 115, 182, 156, 163, 14 },  -- Surf, Cut, Strength, Psychic, Earthquake, Reflect, Protect, Rest, Slash, Swords Dance
+}
+
+-- Universal moves that any Pokemon can safely learn
+local UNIVERSAL_MOVES = { 57, 15, 70, 94, 89, 115, 182, 156, 163, 14 }
+
+-- Move ID to name lookup (for logging)
+local MOVE_NAMES = {
+    [14] = "Swords Dance", [15] = "Cut", [33] = "Tackle", [52] = "Ember", [57] = "Surf",
+    [59] = "Blizzard", [70] = "Strength", [76] = "SolarBeam", [89] = "Earthquake",
+    [94] = "Psychic", [115] = "Reflect", [126] = "Fire Blast", [127] = "Waterfall",
+    [156] = "Rest", [163] = "Slash", [172] = "Flame Wheel", [182] = "Protect",
+    [188] = "Sludge Bomb", [247] = "Shadow Ball", [337] = "Dragon Claw",
+}
+
+-- =============================================================================
+-- MOVE COMPATIBILITY CHECKER
+-- =============================================================================
+
+function GM.isMoveLearnable(speciesId, moveId)
+    -- Check if move is universal (safe for any Pokemon)
+    for _, move in ipairs(UNIVERSAL_MOVES) do
+        if move == moveId then return true, "universal" end
+    end
+    
+    -- Check species-specific moves
+    if MOVE_COMPAT[speciesId] then
+        for _, move in ipairs(MOVE_COMPAT[speciesId]) do
+            if move == moveId then return true, "species" end
+        end
+    end
+    
+    -- If not found, it's not recommended
+    return false, "unknown"
+end
+
+function GM.getMoveName(moveId)
+    return MOVE_NAMES[moveId] or ("Move #" .. moveId)
+end
+
+-- =============================================================================
 -- UTILITY FUNCTIONS
 -- =============================================================================
 
@@ -364,6 +437,20 @@ function GM.teachMove(slot, moveId, moveSlot)
     moveSlot = moveSlot or 1  -- Default to first move slot (1-4)
     if moveSlot < 1 or moveSlot > 4 then moveSlot = 1 end
     
+    -- Get Pokemon species for validation
+    local partyPtr = emu:read32(PLAYER_PARTY_ADDR)
+    local pkmnPtr = partyPtr + (slot * POKEMON_SIZE)
+    local speciesId = emu:read32(pkmnPtr) & 0xFFFF
+    
+    -- Check move compatibility (warning, not blocking)
+    local isLearnable, compat = GM.isMoveLearnable(speciesId, moveId)
+    local moveName = GM.getMoveName(moveId)
+    if not isLearnable then
+        console:log("⚠️  Warning: Move #" .. moveId .. " (" .. moveName .. ") may not be learnable by Pokemon #" .. speciesId)
+    else
+        console:log("✅ Move check: " .. moveName .. " is " .. compat .. " learnable")
+    end
+    
     GM.modifyPartyPokemon(slot, function(pokemon)
         -- 2 = attacks substruct
         local attacksSlot = pokemon.typeToSlot[2]
@@ -395,7 +482,7 @@ function GM.teachMove(slot, moveId, moveSlot)
         attacksData[2] = ppBytes[1] | (ppBytes[2] << 8) | (ppBytes[3] << 16) | (ppBytes[4] << 24)
     end)
     
-    console:log("🎓 Taught move " .. moveId .. " to slot " .. slot .. " (move slot " .. moveSlot .. ")")
+    console:log("🎓 Taught " .. moveName .. " to slot " .. slot .. " (move slot " .. moveSlot .. ")")
     return true
 end
 
