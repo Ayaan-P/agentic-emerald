@@ -66,7 +66,24 @@ MOVE_NAMES = {
     33: "Tackle", 45: "Growl", 52: "Ember", 53: "Flamethrower",
     64: "Peck", 83: "Fire Spin", 88: "Rock Throw", 89: "Earthquake",
     116: "Focus Energy", 163: "Slash", 172: "Flame Wheel",
+    224: "Mega Kick", 241: "Sunny Day", 249: "Rock Smash",
+    257: "Heat Wave", 299: "Blaze Kick", 315: "Overheat",
+    394: "Flare Blitz", 55: "Water Gun", 57: "Surf", 58: "Ice Beam",
+    71: "Absorb", 72: "Mega Drain", 202: "Giga Drain",
 }
+
+# ANSI colors for terminal output
+class Colors:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    MAGENTA = "\033[95m"
+    CYAN = "\033[96m"
+    WHITE = "\033[97m"
 
 
 class PokemonGM:
@@ -79,9 +96,14 @@ class PokemonGM:
         self.socket_host = emu_config.get('host', '127.0.0.1')
         self.socket_port = emu_config.get('port', 8888)
         
+        # Agent settings (load early - needed for paths)
+        agent_config = config.get('agent', {})
+        
         # Paths
         paths = config.get('paths', {})
-        self.state_dir = base_path / paths.get('state_dir', './state')
+        # Agent workspace state dir (where agent writes gm_response.txt)
+        agent_workspace = base_path / agent_config.get('workspace', '../agent')
+        self.state_dir = agent_workspace / 'state'
         self.memory_dir = base_path / paths.get('memory_dir', './memory')
         self.events_file = self.state_dir / 'events.jsonl'
         self.response_file = self.state_dir / 'gm_response.txt'
@@ -91,7 +113,6 @@ class PokemonGM:
         self.species_names = load_species_names(species_file)
         
         # Agent settings
-        agent_config = config.get('agent', {})
         self.agent_id = agent_config.get('id', 'pokemon-gm')
         self.agent_mode = agent_config.get('mode', 'clawdbot')  # 'clawdbot' or 'direct'
         self.agent_model = agent_config.get('model', 'claude-sonnet-4-20250514')
@@ -143,6 +164,9 @@ class PokemonGM:
         self.connected = False
         self.agent_busy = False
         self.pending_events = []
+        self.skipped_events = []  # Accumulate low-uncertainty events for context
+        self.current_state = {}  # Latest game state for helpers
+        self.move_usage = {}  # {moveId: count} for mastery tracking
         
         # Stats
         self.battles_won = 0
@@ -233,7 +257,19 @@ class PokemonGM:
     
     def log(self, msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
-        print(f"[{ts}] {msg}")
+        print(f"{Colors.DIM}{ts}{Colors.RESET}  {msg}")
+    
+    def print_banner(self):
+        """Print startup banner"""
+        C = Colors
+        print(f"""
+{C.BOLD}{C.MAGENTA}╔══════════════════════════════════════════════════════════╗
+║  {C.CYAN}▄▀█ █▀▀ █▀▀ █▄ █ ▀█▀ █ █▀▀   █▀▀ █▀▄▀█ █▀▀ █▀█ ▄▀█ █   █▀▄{C.MAGENTA}  ║
+║  {C.CYAN}█▀█ █▄█ ██▄ █ ▀█  █  █ █▄▄   ██▄ █ ▀ █ ██▄ █▀▄ █▀█ █▄▄ █▄▀{C.MAGENTA}  ║
+║                                                            ║
+║  {C.WHITE}AI Game Master • Narrative-Driven Pokemon{C.MAGENTA}                 ║
+╚══════════════════════════════════════════════════════════╝{C.RESET}
+""")
     
     def get_species_name(self, species_id: int) -> str:
         if species_id <= 0:
@@ -252,17 +288,93 @@ class PokemonGM:
             parts.append(f"{name} L{level} ({hp}/{max_hp})")
         return ", ".join(parts)
     
+    def get_party_pokemon_name(self, slot: int) -> str:
+        """Get Pokemon name from current party by slot"""
+        try:
+            party = self.current_state.get('party', [])
+            if 0 <= slot < len(party):
+                species = party[slot].get('species', 0)
+                return self.get_species_name(species)
+        except:
+            pass
+        return f"Pokemon #{slot}"
+    
+    def get_readable_action(self, action_cmd: str) -> str:
+        """Convert GM command to human-readable description"""
+        import re
+        
+        stat_names = {
+            'hp': 'HP', 'atk': 'Attack', 'attack': 'Attack',
+            'def': 'Defense', 'defense': 'Defense',
+            'spa': 'Sp. Atk', 'spatk': 'Sp. Atk', 'sp_attack': 'Sp. Atk',
+            'spd': 'Sp. Def', 'spdef': 'Sp. Def', 'sp_defense': 'Sp. Def',
+            'spe': 'Speed', 'speed': 'Speed'
+        }
+        
+        try:
+            # GM.addEVs(slot, stat, amount)
+            match = re.search(r'GM\.addEVs\((\d+),\s*["\']?(\w+)["\']?,\s*(\d+)\)', action_cmd)
+            if match:
+                slot, stat, amount = match.groups()
+                pokemon = self.get_party_pokemon_name(int(slot))
+                stat_name = stat_names.get(stat.lower(), stat)
+                return f"{pokemon} gains +{amount} {stat_name} training"
+            
+            # GM.healParty()
+            if 'GM.healParty()' in action_cmd:
+                return "Party fully restored!"
+            
+            # GM.teachMove(slot, moveId, moveSlot)
+            match = re.search(r'GM\.teachMove\((\d+),\s*(\d+)', action_cmd)
+            if match:
+                slot, move_id = match.groups()
+                pokemon = self.get_party_pokemon_name(int(slot))
+                move_name = MOVE_NAMES.get(int(move_id), "new move")
+                return f"{pokemon} learned {move_name}!"
+            
+            # GM.giveItem(slot, itemId)
+            match = re.search(r'GM\.giveItem\((\d+),\s*(\d+)\)', action_cmd)
+            if match:
+                slot, item_id = match.groups()
+                pokemon = self.get_party_pokemon_name(int(slot))
+                return f"{pokemon} received an item"
+            
+            # GM.addExperience(slot, amount)
+            match = re.search(r'GM\.addExperience\((\d+),\s*(\d+)\)', action_cmd)
+            if match:
+                slot, amount = match.groups()
+                pokemon = self.get_party_pokemon_name(int(slot))
+                return f"{pokemon} gains +{amount} bonus EXP"
+            
+            # GM.setFriendship(slot, value)
+            match = re.search(r'GM\.setFriendship\((\d+),\s*(\d+)\)', action_cmd)
+            if match:
+                slot, value = match.groups()
+                pokemon = self.get_party_pokemon_name(int(slot))
+                return f"{pokemon}'s bond strengthens"
+            
+            # Fallback: extract function name
+            match = re.search(r'GM\.(\w+)\(', action_cmd)
+            if match:
+                return f"GM.{match.group(1)}()"
+                
+        except Exception:
+            pass
+        
+        return action_cmd[:50]
+    
     def connect(self) -> bool:
+        C = Colors
         try:
             self.sock = socket.socket()
             self.sock.settimeout(5)
             self.sock.connect((self.socket_host, self.socket_port))
             self.sock.setblocking(False)
             self.connected = True
-            self.log(f"🎮 Connected to mGBA on {self.socket_host}:{self.socket_port}")
+            self.log(f"{C.GREEN}● Connected{C.RESET} to mGBA on {C.CYAN}{self.socket_host}:{self.socket_port}{C.RESET}")
             return True
         except Exception as e:
-            self.log(f"❌ Connection failed: {e}")
+            self.log(f"{C.RED}✗ Connection failed:{C.RESET} {e}")
             self.connected = False
             return False
     
@@ -341,7 +453,7 @@ class PokemonGM:
         # Unknown events — medium uncertainty
         return 0.5
     
-    def should_invoke_agent(self, event_type: str, context: dict, threshold: float = 0.4) -> bool:
+    def should_invoke_agent(self, event_type: str, context: dict, threshold: float = 0.15) -> bool:
         """
         Determine if agent should be invoked for this event.
         Threshold (default 0.4) can be lowered to invoke more frequently.
@@ -349,12 +461,35 @@ class PokemonGM:
         uncertainty = self.score_event_uncertainty(event_type, context)
         return uncertainty >= threshold
     
+    def _summarize_event(self, event_type: str, context: dict) -> str:
+        """Create a brief summary of a skipped event for batching context"""
+        if event_type == 'BATTLE_SUMMARY':
+            buffer = context.get('buffer', [])
+            for event in buffer:
+                if event.get('event') == 'START':
+                    return f"Wild battle vs {event.get('enemy', '???')}"
+            return "Wild battle"
+        elif event_type == 'EXPLORATION_SUMMARY':
+            return context.get('summary', 'Explored')
+        else:
+            return event_type
+    
     def prompt_agent_async(self, event_type: str, context: dict):
         """Send event to AI agent in background thread (with uncertainty check)"""
         # Always invoke for high-uncertainty events, skip routine ones
         if not self.should_invoke_agent(event_type, context):
             uncertainty = self.score_event_uncertainty(event_type, context)
-            self.log(f"⏭️  Skip agent (low uncertainty {uncertainty:.2f}): {event_type}")
+            C = Colors
+            self.log(f"{C.DIM}⏭ Skip (uncertainty {uncertainty:.2f}): {event_type}{C.RESET}")
+            # Accumulate skipped event for context in next significant event
+            self.skipped_events.append({
+                'type': event_type,
+                'time': datetime.now().isoformat(),
+                'summary': self._summarize_event(event_type, context)
+            })
+            # Keep max 20 skipped events
+            if len(self.skipped_events) > 20:
+                self.skipped_events = self.skipped_events[-20:]
             return
         
         if self.agent_busy:
@@ -366,7 +501,8 @@ class PokemonGM:
             self.agent_busy = True
             try:
                 prompt = self.build_prompt(event_type, context)
-                self.log(f"📨 → Agent: {event_type}")
+                C = Colors
+                self.log(f"{C.MAGENTA}▲ THINKING...{C.RESET}  {C.DIM}{event_type}{C.RESET}")
                 
                 if self.agent_mode == 'direct':
                     response_text = self._call_anthropic_direct(prompt)
@@ -378,30 +514,57 @@ class PokemonGM:
                     response_text = self._call_clawdbot(prompt)
                 
                 if response_text:
-                    self.log(f"✅ Agent responded to {event_type}")
+                    C = Colors
+                    self.log(f"{C.GREEN}▼ AI RESPONSE{C.RESET}")
+                    print(f"  {C.DIM}{'─' * 56}{C.RESET}")
+                    
                     # Save to session history if persistent
                     self._add_to_session_history(event_type, prompt, response_text)
                     
                     action_cmd = None
                     for line in response_text.split('\n')[:10]:
                         if line.strip():
-                            self.log(f"   🤖 {line[:120]}")
+                            # Color-code different response types
+                            if line.startswith('OBSERVATION:'):
+                                label = f"{C.CYAN}OBS{C.RESET}"
+                                content = line.split(':', 1)[1].strip()
+                            elif line.startswith('PATTERN:'):
+                                label = f"{C.YELLOW}PTN{C.RESET}"
+                                content = line.split(':', 1)[1].strip()
+                            elif line.startswith('MEMORY:'):
+                                label = f"{C.MAGENTA}MEM{C.RESET}"
+                                content = line.split(':', 1)[1].strip()
+                            elif line.startswith('ACTION:'):
+                                label = f"{C.GREEN}ACT{C.RESET}"
+                                content = line.split(':', 1)[1].strip()
+                            else:
+                                label = f"{C.DIM}...{C.RESET}"
+                                content = line.strip()
+                            print(f"  {label}  {content}")
+                            
                             if line.strip().startswith('ACTION:'):
                                 action_cmd = line.split('ACTION:', 1)[1].strip()
+                    
+                    print(f"  {C.DIM}{'─' * 56}{C.RESET}")
                     
                     # Execute action if present
                     if action_cmd and action_cmd.lower() != 'none':
                         # Add nc timeout flag if missing
                         if '| nc ' in action_cmd and ' -w ' not in action_cmd:
                             action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')
-                        self.log(f"   ⚡ Executing: {action_cmd[:80]}")
+                        # Human-readable action description
+                        readable = self.get_readable_action(action_cmd)
+                        print(f"  {C.BOLD}{C.GREEN}⚡ {readable}{C.RESET}")
                         try:
-                            subprocess.run(action_cmd, shell=True, timeout=5)
-                            self.log(f"   ✅ Action complete")
+                            subprocess.run(action_cmd, shell=True, timeout=5,
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                            print(f"  {C.GREEN}✓ Complete{C.RESET}")
                         except subprocess.TimeoutExpired:
-                            self.log(f"   ⚠️ Action sent (nc timeout normal)")
+                            print(f"  {C.YELLOW}✓ Sent{C.RESET}")
                         except Exception as e:
-                            self.log(f"   ❌ Action failed: {e}")
+                            print(f"  {C.RED}✗ Failed: {e}{C.RESET}")
+                    else:
+                        print(f"  {C.DIM}No action taken{C.RESET}")
                     
             except Exception as e:
                 self.log(f"❌ Agent error: {e}")
@@ -414,7 +577,7 @@ class PokemonGM:
         threading.Thread(target=run_agent, daemon=True).start()
     
     def _call_clawdbot(self, prompt: str) -> str:
-        """Call agent via Clawdbot CLI"""
+        """Call agent via Clawdbot CLI - agent writes response to file"""
         # Clear previous response
         if self.response_file.exists():
             self.response_file.unlink()
@@ -422,15 +585,17 @@ class PokemonGM:
         result = subprocess.run(
             ["clawdbot", "agent", "--agent", self.agent_id,
              "--session-id", self.session_id, "--message", prompt],
-            capture_output=True, text=True, timeout=60
+            capture_output=True, text=True, timeout=120
         )
         
         if result.returncode == 0:
-            # Check for response file
+            # Wait for agent to write response file
             for _ in range(10):
                 time.sleep(0.1)
                 if self.response_file.exists():
-                    return self.response_file.read_text().strip()
+                    response = self.response_file.read_text().strip()
+                    if response:
+                        return response
         return ""
     
     def _call_anthropic_direct(self, prompt: str) -> str:
@@ -463,7 +628,7 @@ class PokemonGM:
         full_prompt = f"{self.system_prompt}\n\n---\n\n{prompt}"
         
         result = subprocess.run(
-            ["claude", "-p", full_prompt, "--no-markdown"],
+            ["claude", "-p", full_prompt],
             capture_output=True, text=True, timeout=120
         )
         
@@ -514,41 +679,105 @@ class PokemonGM:
         prompt += f"Session: {session_mins} mins | Badges: {state.get('badge_count', 0)}\n"
         prompt += f"Stats: {self.battles_won} wins, {self.pokemon_caught} caught, {self.close_calls} close calls\n"
         
+        # Recent battle history for pattern recognition
+        if self.battle_history:
+            recent = self.battle_history[-3:]
+            history_str = ", ".join([
+                f"{b['enemy']}({'close' if b['was_close'] else 'clean'})" 
+                for b in recent
+            ])
+            prompt += f"Recent: {history_str}\n"
+        
         # Event-specific details
         if event_type == 'BATTLE_SUMMARY':
             buffer = ctx.get('buffer', [])
             prompt += "=== BATTLE COMPLETE ===\n"
+            prompt += "Read the battle text below to determine what happened.\n"
+            
             for event in buffer:
-                if event.get('event') == 'START':
-                    prompt += f"Started: {event.get('type')} vs {event.get('enemy')}\n"
-                elif event.get('event') == 'END':
-                    prompt += f"Duration: {event.get('duration_sec')}s, HP: {event.get('hp_after')}%\n"
+                ev = event.get('event', '')
+                if ev == 'START':
+                    prompt += f"Started: {event.get('type')} battle vs {event.get('enemy')}\n"
+                    if event.get('enemy_party'):
+                        prompt += f"  Trainer's team: {', '.join(event['enemy_party'])}\n"
+                elif ev == 'END':
+                    prompt += f"Duration: {event.get('duration_sec', 0)}s, Party HP: {event.get('hp_after', 100)}%\n"
                     if event.get('was_close'):
                         prompt += "⚠️ CLOSE CALL!\n"
+                    if event.get('damage_taken'):
+                        dmg_str = ", ".join([f"{k}: -{v}HP" for k, v in event['damage_taken'].items()])
+                        prompt += f"Damage taken: {dmg_str}\n"
+                elif ev == 'CAUGHT':
+                    prompt += f"🎉 Caught: {event.get('pokemon')}\n"
             
             battle_dialogue = ctx.get('battle_dialogue', [])
             if battle_dialogue:
-                prompt += "\n=== BATTLE TEXT ===\n"
+                prompt += "\n=== BATTLE TEXT (what the game showed) ===\n"
                 for text in battle_dialogue[-30:]:
                     prompt += f"• {text}\n"
+            
+            # Battle damage log from Lua
+            battle_log = ctx.get('battle_log', [])
+            if battle_log:
+                prompt += "\n=== DAMAGE LOG ===\n"
+                for entry in battle_log[-20:]:
+                    etype = entry.get('type', '')
+                    if etype == 'attack':
+                        move_id = entry.get('moveId', 0)
+                        move_name = MOVE_NAMES.get(move_id, f"Move#{move_id}")
+                        damage = entry.get('damage', 0)
+                        enemy_hp = entry.get('enemyHP', '?')
+                        enemy_max = entry.get('enemyMaxHP', '?')
+                        prompt += f"• {move_name} dealt {damage} damage (enemy: {enemy_hp}/{enemy_max})\n"
+                    elif etype == 'damage_taken':
+                        damage = entry.get('damage', 0)
+                        hp = entry.get('hp', '?')
+                        prompt += f"• Took {damage} damage (HP now: {hp})\n"
         
         elif event_type == 'EXPLORATION_SUMMARY':
+            state = ctx.get('state', {})
             summary = ctx.get('summary', '')
+            
             prompt += f"=== EXPLORATION ===\n{summary}\n"
+            
+            if state.get('itemsGained', 0) > 0:
+                prompt += f"📦 Items gained: {state['itemsGained']}\n"
+            if state.get('moneyChange', 0) != 0:
+                change = state['moneyChange']
+                if change > 0:
+                    prompt += f"💰 Money gained: ${change}\n"
+                else:
+                    prompt += f"💸 Money spent: ${abs(change)}\n"
+            if state.get('dialogueCount', 0) > 0:
+                prompt += f"💬 NPCs talked to: {state['dialogueCount']}\n"
+                # Include actual dialogue text
+                dialogues = state.get('dialogueTexts', [])
+                for i, text in enumerate(dialogues[:5]):
+                    prompt += f"  NPC {i+1}: \"{text[:100]}{'...' if len(text) > 100 else ''}\"\n"
+        
+        # Add accumulated skipped events as context
+        if self.skipped_events:
+            prompt += f"\n=== SINCE LAST UPDATE ({len(self.skipped_events)} routine events) ===\n"
+            for event in self.skipped_events:
+                prompt += f"• {event.get('summary', event.get('type'))}\n"
+            prompt += "\n"
+            # Clear after including
+            self.skipped_events = []
         
         # Add session history context if available
         if self.session_persistent and self.session_history:
             prompt += f"\n=== SESSION HISTORY ({len(self.session_history)} previous events) ===\n"
-            # Include last 5 interactions to keep context window manageable
-            for entry in self.session_history[-5:]:
-                prompt += f"• [{entry.get('event_type', 'unknown')}] {entry.get('response', '')[:100]}\n"
-            prompt += "\nRemember the context from these previous events when making decisions.\n"
+            # Include last 10 interactions for better continuity
+            for entry in self.session_history[-10:]:
+                prompt += f"• [{entry.get('event_type', 'unknown')}] {entry.get('response', '')[:200]}\n"
+            prompt += "\nYou've seen these events before. Build on this context, don't repeat yourself.\n"
         
         return prompt
     
     def process_event(self, data: dict):
         """Process event from mGBA"""
         event_type = data.get('event_type', 'unknown')
+        self.current_state = data  # Track for helpers
         
         if event_type == 'battle_start':
             enemy = data.get('enemy', {})
@@ -576,10 +805,11 @@ class PokemonGM:
             if is_rematch:
                 battle_type += ' (REMATCH)'
             
+            self.current_enemy = f"{enemy_name} L{enemy.get('level', '?')}"
             self.battle_buffer = [{
                 'event': 'START',
                 'type': battle_type,
-                'enemy': f"{enemy_name} L{enemy.get('level', '?')}",
+                'enemy': self.current_enemy,
                 'is_double': is_double,
                 'is_trainer': is_trainer,
                 'is_safari': is_safari,
@@ -590,11 +820,8 @@ class PokemonGM:
             self.battle_start_hp = {i: p.get('current_hp', 0) for i, p in enumerate(party)}
             self.battle_start_levels = {i: p.get('level', 0) for i, p in enumerate(party)}
             
-            battle_log = f"⚔️ BATTLE START: vs {enemy_name}"
-            if is_double:
-                battle_log += " [DOUBLE BATTLE]"
-            if is_safari:
-                battle_log += " [SAFARI ZONE]"
+            C = Colors
+            battle_log = f"{C.BOLD}{C.RED}⚔ BATTLE{C.RESET}  {C.YELLOW}{battle_type}{C.RESET} vs {C.WHITE}{C.BOLD}{enemy_name}{C.RESET} L{enemy.get('level', '?')}"
             self.log(battle_log)
             
         elif event_type == 'battle_end':
@@ -617,27 +844,63 @@ class PokemonGM:
                 avg_hp = 1.0
             
             duration = int(time.time() - (self.battle_start_time or time.time()))
+            
+            # Calculate damage taken during battle
+            damage_taken = {}
+            for i, p in enumerate(party):
+                start_hp = self.battle_start_hp.get(i, p.get('max_hp', 0))
+                current_hp = p.get('current_hp', 0)
+                if start_hp > current_hp:
+                    name = self.get_species_name(p.get('species', 0))
+                    damage_taken[name] = start_hp - current_hp
+            
             self.battle_buffer.append({
                 'event': 'END',
                 'outcome': outcome_name,
                 'duration_sec': duration,
                 'hp_after': int(avg_hp * 100),
-                'was_close': avg_hp < 0.25
+                'was_close': avg_hp < 0.25,
+                'damage_taken': damage_taken
             })
             
-            self.log(f"🏁 BATTLE END: {outcome_name}")
+            C = Colors
+            if outcome == 1:
+                outcome_color = C.GREEN
+            elif outcome == 2:
+                outcome_color = C.RED
+            else:
+                outcome_color = C.YELLOW
+            self.log(f"{C.BOLD}🏁 END{C.RESET}  {outcome_color}{outcome_name.upper()}{C.RESET}")
             
             if outcome == 1:
                 self.battles_won += 1
             if avg_hp < 0.25 and outcome == 1:
                 self.close_calls += 1
             
+            # Record to battle history
+            battle_record = {
+                'enemy': getattr(self, 'current_enemy', 'Unknown'),
+                'outcome': outcome_name,
+                'hp_after': int(avg_hp * 100),
+                'was_close': avg_hp < 0.25
+            }
+            self.battle_history.append(battle_record)
+            if len(self.battle_history) > 10:
+                self.battle_history.pop(0)
+            
+            # Debug: show battle dialogue count
+            battle_dialogue = data.get('battleDialogue', [])
+            battle_log = data.get('battleLog', [])
+            C = Colors
+            self.log(f"{C.DIM}📜 Battle text: {len(battle_dialogue)} msgs, log: {len(battle_log)} entries{C.RESET}")
+            
             # Send to agent
             self.prompt_agent_async('BATTLE_SUMMARY', {
                 'state': data,
                 'buffer': self.battle_buffer,
                 'outcome': outcome_name,
-                'battle_dialogue': data.get('battleDialogue', [])
+                'battle_dialogue': battle_dialogue,
+                'battle_log': battle_log
             })
             
             self.in_battle = False
@@ -657,26 +920,83 @@ class PokemonGM:
                 parts.append(f"{dialogues} NPCs")
             
             if parts:
-                summary = ", ".join(parts)
-                self.log(f"📊 EXPLORATION: {summary}")
+                summary = " │ ".join(parts)
+                C = Colors
+                self.log(f"{C.BLUE}▸ EXPLORE{C.RESET}  {summary}")
                 self.prompt_agent_async('EXPLORATION_SUMMARY', {
                     'state': data,
                     'summary': summary
                 })
         
         elif event_type == 'badge_obtained':
-            self.log(f"🏅 BADGE OBTAINED!")
+            C = Colors
+            badge_count = data.get('badge_count', '?')
+            print(f"\n  {C.BOLD}{C.YELLOW}{'★' * 40}{C.RESET}")
+            print(f"  {C.BOLD}{C.YELLOW}★  BADGE OBTAINED!  ★  Total: {badge_count}  ★{C.RESET}")
+            print(f"  {C.BOLD}{C.YELLOW}{'★' * 40}{C.RESET}\n")
             self.prompt_agent_async('BADGE_OBTAINED', {'state': data})
         
         elif event_type == 'party_changed':
-            self.log(f"📋 Party: {self.format_party(data.get('party', []))}")
+            # Debounce: only log party every 30 seconds max
+            now = time.time()
+            if not hasattr(self, '_last_party_log'):
+                self._last_party_log = 0
+            if now - self._last_party_log < 30:
+                return
+            self._last_party_log = now
+            
+            C = Colors
+            party = data.get('party', [])
+            parts = []
+            for p in party:
+                name = self.get_species_name(p.get('species', 0))
+                level = p.get('level', '?')
+                hp = p.get('current_hp', 0)
+                max_hp = p.get('max_hp', 1)
+                hp_pct = hp / max(max_hp, 1)
+                if hp_pct > 0.5:
+                    hp_color = C.GREEN
+                elif hp_pct > 0.2:
+                    hp_color = C.YELLOW
+                else:
+                    hp_color = C.RED
+                parts.append(f"{name} {C.DIM}L{level}{C.RESET} {hp_color}{hp}/{max_hp}{C.RESET}")
+            self.log(f"{C.CYAN}▸ PARTY{C.RESET}  {' │ '.join(parts)}")
+        
+        elif event_type == 'pokemon_caught':
+            C = Colors
+            species = data.get('species', 0)
+            pokemon_name = self.get_species_name(species)
+            self.pokemon_caught += 1
+            print(f"\n  {C.BOLD}{C.MAGENTA}{'◆' * 30}{C.RESET}")
+            print(f"  {C.BOLD}{C.MAGENTA}◆  CAUGHT: {pokemon_name}!  ◆{C.RESET}")
+            print(f"  {C.BOLD}{C.MAGENTA}{'◆' * 30}{C.RESET}\n")
+            self.prompt_agent_async('POKEMON_CAUGHT', {
+                'state': data,
+                'caught_species': species
+            })
+        
+        elif event_type == 'move_mastery':
+            C = Colors
+            move_id = data.get('moveId', 0)
+            count = data.get('count', 0)
+            move_name = MOVE_NAMES.get(move_id, f"Move #{move_id}")
+            self.move_usage[move_id] = count
+            self.log(f"{C.YELLOW}★ MASTERY{C.RESET}  {C.WHITE}{C.BOLD}{move_name}{C.RESET} used {count}x")
+            self.prompt_agent_async('MOVE_MASTERY', {
+                'state': data,
+                'move_id': move_id,
+                'move_name': move_name,
+                'count': count,
+            })
         
         elif event_type == 'connected':
-            self.log(f"✅ Server ready")
+            C = Colors
+            self.log(f"{C.GREEN}● Ready{C.RESET}  {C.DIM}Game connected{C.RESET}")
     
     def run(self):
         """Main event loop"""
-        self.log("🎮 Agentic Emerald Daemon starting...")
+        self.print_banner()
         
         while True:
             if not self.connected:

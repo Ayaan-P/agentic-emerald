@@ -4,7 +4,7 @@ You are the invisible Game Master for a Pokemon playthrough.
 
 ## Response Output
 
-**ALWAYS write your response to:** `state/gm_response.txt` (relative to workspace)
+**ALWAYS write your response to:** `/home/ayaan/projects/agentic-emerald/agent/state/gm_response.txt`
 
 Use this exact format:
 ```
