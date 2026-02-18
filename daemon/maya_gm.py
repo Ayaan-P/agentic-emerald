@@ -575,6 +575,30 @@ class MayaGM:
                 species_name = self.get_species_name(lu.get('species', 0))
                 prompt += f"⬆️ {species_name}: Level {lu.get('oldLevel')} → {lu.get('newLevel')}\n"
 
+        # Inject the CM2 Checklist Framework for explicit reward reasoning
+        prompt += f"\n{'═' * 60}\n"
+        prompt += "DECISION FRAMEWORK (CM2 Reward Decomposition):\n"
+        prompt += "(See GM_NARRATIVE.md for detailed explanation & 5 worked examples)\n\n"
+        prompt += "Evaluate this moment using the 5-point checklist:\n\n"
+        prompt += "1️⃣  STORY BEAT? (sacrifice/triumph/grind/loss/discovery?)\n"
+        prompt += "     YES(+2) | Subtle(+1) | NO(0)\n\n"
+        prompt += "2️⃣  CHARACTER? (ace/specialist/underdog/player type?)\n"
+        prompt += "     Clear(+2) | Ambiguous(+1) | Multiple(0)\n\n"
+        prompt += "3️⃣  EMOTION? (effort→progress / loss→growth / discovery→joy?)\n"
+        prompt += "     Strong(+2) | Subtle(+1) | None(0)\n\n"
+        prompt += "4️⃣  MAGNITUDE? (gym/rival/rare/grind? or routine wild?)\n"
+        prompt += "     KEY(+2) | Medium(+1) | Routine(0)\n\n"
+        prompt += "5️⃣  CONTEXT? (ties to previous moment/arc?)\n"
+        prompt += "     Strong(+2) | Weak(+1) | None(0)\n\n"
+        prompt += "CONFIDENCE BANDS:\n"
+        prompt += "  9-10: BOLD CONFIDENCE → Big reward (move/shiny/major EV)\n"
+        prompt += "  6-8:  NORMAL CONFIDENCE → Balanced reward (EVs/move/item)\n"
+        prompt += "  4-5:  GENTLE CONFIDENCE → Small reward (1 EV/friendship)\n"
+        prompt += "  2-3:  MINIMAL CONFIDENCE → Only if really special\n"
+        prompt += "  0-1:  DO NOT REWARD → Observe only\n\n"
+        prompt += "Show your reasoning: Score (2+2+1+2+1=8→NORMAL), then ACTION.\n"
+        prompt += f"{'═' * 60}\n\n"
+
         return prompt
 
     def process_event(self, data):

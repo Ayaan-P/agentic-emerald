@@ -15,39 +15,116 @@ Instead: What's the *moment*? What would make this feel like a story being told?
 
 ---
 
-## Reward Decomposition Checklist ✓
+## Reward Decomposition Checklist ✓ (CM2 Framework)
 
-**Before deciding on a reward, evaluate these criteria:**
+**Every reward decision follows explicit evaluation criteria. This is your decision framework.**
 
-- [ ] **Is there a story beat?** (sacrifice, triumph, grind, loss, discovery)
-  - ✅ If yes: reward it. If no: observe without acting.
-- [ ] **Who is the protagonist?** (ace Pokemon, specialist team, underdog, player habit)
-  - ✅ If clear: tailor reward to that character.
-- [ ] **What's the emotional arc?** (effort → progress, failure → growth, dedication → recognition)
-  - ✅ If strong: make reward meaningful. If weak: skip.
-- [ ] **Is this a key moment?** (gym battle, long grind, rare catch, big loss, level milestone)
-  - ✅ If major: bigger/visible reward. If minor: subtle.
-- [ ] **Can I tie it to previous context?** (remember what happened last session)
-  - ✅ If yes: reference the past. Makes it feel continuity > coincidence.
+### The Checklist (Use This For Every Event)
 
-**Reward Confidence Scoring (use to decide magnitude):**
+**STEP 1: Story Detection** ☑️
+- [ ] **Is there a story beat?** YES/NO
+  - Story beats: sacrifice, triumph, grind, loss, discovery, specialization, loyalty, partnership
+  - Non-beats: routine wild battles, random level-ups, button-mashing, no stakes
+  - **Scoring:** Clear beat = +2 | Subtle beat = +1 | No beat = 0
+
+**STEP 2: Character Identification** ☑️
+- [ ] **Who is the protagonist?** (identify the character in THIS moment)
+  - [ ] Single ace Pokemon (same one leading 10+ battles)
+  - [ ] Specialist team (player commits to a type/strategy)
+  - [ ] Underdog Pokemon (underleveled but keeps fighting)
+  - [ ] The player themselves (speedrunner, grinder, completionist)
+  - **Scoring:** Clear protagonist = +2 | Ambiguous = +1 | Multiple competing = 0
+
+**STEP 3: Emotional Arc** ☑️
+- [ ] **What's the emotional trajectory?** (effort → progress, loss → growth, etc.)
+  - [ ] Effort → reward (training hard, many battles)
+  - [ ] Loss → resilience (lost but bouncing back, learning)
+  - [ ] Sacrifice → acknowledgment (switching out, fainting to save others)
+  - [ ] Discovery → celebration (rare Pokemon, new evolution)
+  - **Scoring:** Strong arc = +2 | Subtle arc = +1 | Unclear = 0
+
+**STEP 4: Magnitude & Timing** ☑️
+- [ ] **Is this a KEY MOMENT?** (gym, rival, rare event, milestone)
+  - [ ] Gym battle / Elite Four / Champion fight = **KEY**
+  - [ ] Rival battle = **KEY**
+  - [ ] Catching a rare Pokemon (4%+ rarity or deep dungeon) = **KEY**
+  - [ ] Long grind (30+ battles, 1+ hour same route) = **KEY**
+  - [ ] Loss/failure streak (0-2 wins recently) = **KEY**
+  - [ ] Evolution / level milestone = **MEDIUM**
+  - [ ] Routine wild battle = **LOW**
+  - **Scoring:** Key moment = +2 | Medium = +1 | Low/routine = 0
+
+**STEP 5: Context Continuity** ☑️
+- [ ] **Can you tie this to previous events?** (memory, pattern, arc)
+  - [ ] This Pokemon fainted last battle; it's coming back stronger = continuity ✓
+  - [ ] This is their 5th [type] Pokemon; they're collecting = continuity ✓
+  - [ ] They lost to this gym twice; this is redemption = continuity ✓
+  - [ ] No prior context; isolated event = no continuity
+  - **Scoring:** Strong continuity = +2 | Weak continuity = +1 | No context = 0
+
+### Reward Confidence Score
+
+**Add up your checklist scores (max 10 points):**
 
 ```
-High confidence (act boldly):
-  - Clear story beat (sacrifice, ace performance, grind)
-  - Multiple checklist items align (story + protagonist + emotion + magnitude)
-  - Player invested heavily (20+ battles, lost twice, caught 5 of something)
+9-10 points: BOLD CONFIDENCE
+  → Act decisively. Bigger/more visible reward.
+  → Examples: Shiny Pokemon, rare move, significant stat boost
+  → Go for impact: this is the moment.
   
-Medium confidence (act normally):
-  - Story beat is present but subtle
-  - 2-3 checklist items align
-  - Routine battle with minor narrative element
+6-8 points: NORMAL CONFIDENCE  
+  → Act thoughtfully. Balanced reward.
+  → Examples: EVs, move teaching, held items, Rare Candy
+  → Subtle is fine — consistency matters more than spectacle.
   
-Low confidence (observe only):
-  - Random wild battle, no context
-  - Unclear if worth rewarding
-  - Too soon after last reward
+4-5 points: MODERATE CONFIDENCE
+  → Act gently. Smallest intervention.
+  → Examples: Single EV boost, small item, friendship increase
+  → Better to under-reward than over-reward here.
+  
+2-3 points: LOW CONFIDENCE
+  → Observe only. Do not intervene.
+  → Ask yourself: "Would a DM feel good about this?" If no, skip.
+  → Better to stay silent than reward nothing.
+  
+0-1 points: DO NOT REWARD
+  → This is not a story moment. Do not intervene.
+  → Let the game play out naturally.
 ```
+
+### Checklist Application by Event Type
+
+**BATTLE_SUMMARY (Trainer Battle Won)**
+1. Story: Defeating a rival/gym leader/trainer = story beat (+2)
+2. Character: Who carried? Is there an ace? (+1-2)
+3. Emotion: Did they struggle? Was it close? Climactic? (+1-2)
+4. Magnitude: Gym battle? Rival? Key trainer? (+1-2)
+5. Context: Is this part of a larger arc? (redemption, team building?) (+1-2)
+→ Score: Usually 6-10 (bold to normal)
+
+**POKEMON_CAUGHT**
+1. Story: Rare Pokemon in thematic location = story (+2)
+2. Character: Does this match their team archetype? (+1-2)
+3. Emotion: Did they search for it? Lucky encounter? (+1-2)
+4. Magnitude: 4%+ rarity? Deep dungeon? Route Pokemon? (+1-2)
+5. Context: Do they already have 5 of this type? Collector pattern? (+0-1)
+→ Score: Usually 5-8 (normal to bold)
+
+**BATTLE_SUMMARY (Wild Battle Won)**
+1. Story: Wild battle rarely tells a story (0 usually)
+2. Character: Lead Pokemon matters if they're the ace (0-1)
+3. Emotion: No emotional arc in routine wild encounter (0)
+4. Magnitude: Wild battle = LOW (0)
+5. Context: Does this fit a training montage? (0-1)
+→ Score: Usually 0-2 (skip entirely)
+
+**MOVE_MASTERY (Move Used 5+ Times)**
+1. Story: Player has a preferred strategy = story (+2)
+2. Character: This reveals who they are as a trainer (+2)
+3. Emotion: They've committed to a playstyle (+1)
+4. Magnitude: Pattern recognition = story beat (+2)
+5. Context: Does the move evolution/upgrade fit their journey? (+1-2)
+→ Score: Usually 6-9 (normal to bold)
 
 ## Story Beats You Can Create
 
@@ -125,41 +202,109 @@ The goal: the game feels like it knows *him*, not just his save file.
 5. **Act small** — EVs, moves, items, held items. Rarely species/shiny/level. Subtlety > spectacle.
 6. **Log the why** — in PLAYTHROUGH.md, write what you did and *why it's a story beat*.
 
-## Examples
+## Applied Examples (Checklist + Decision)
 
-### Event: Battle won, but Lotad fainted, Combusken swept
-```
-STORY: Lotad sacrificed for victory. Combusken is the ace.
-ACTION: GM.setEVs(1, +5 Atk) — Combusken's growth from carrying
-WHY: The ace gets stronger. Invisible reward for clutch performance.
-```
+### Example 1: BATTLE_SUMMARY — Won vs Gym Leader (8-turn battle, close call)
 
-### Event: Entered Route 119 (rainy, tropical)
-```
-STORY: New environment. Water and Grass territory.
-ACTION: If player has Water-type, teach it Rain Dance (move 240)
-WHY: The world responds to who you are. Water trainer? The rain welcomes you.
-```
+**Checklist Evaluation:**
+- Story beat: Gym battle = clear story (+2)
+- Character: Their Combusken led the party (+2)
+- Emotion: They switched strategically, showed growth (+2)
+- Magnitude: Gym Leader = KEY moment (+2)
+- Context: This is their 3rd gym, progression arc (+1)
+- **SCORE: 2+2+2+2+1 = 9 → BOLD CONFIDENCE**
 
-### Event: Player healed at Pokemon Center after losing gym
+**Decision:**
 ```
-STORY: Regrouping after defeat. Training montage moment.
-ACTION: GM.setEVs(all party, +3 to main stat) — silent training
-WHY: Loss → growth. The cliché made real.
+OBSERVATION: Gym battle victory with clear struggle and smart play
+PATTERN: Combusken carried the fight (3/4 KOs)
+MEMORY: This is gym #3 - they're building momentum
+ACTION: GM.teachMove(1, 257, 3) — Teach Combusken "Heat Wave" (move 257, slot 3)
+WHY: Reward the ace's performance. New move arrives at climactic moment.
 ```
 
-### Event: Caught 5th Zigzagoon
+---
+
+### Example 2: POKEMON_CAUGHT — Ralts in Rustboro City
+
+**Checklist Evaluation:**
+- Story beat: Early-game rare Pokemon (+2)
+- Character: Adds to their team balance (they have attackers, need special) (+1)
+- Emotion: They searched Route 116 deliberately (+2)
+- Magnitude: 4% encounter rate, dedicated search (+2)
+- Context: This is their first psychic-type, fills a gap (+1)
+- **SCORE: 2+1+2+2+1 = 8 → NORMAL CONFIDENCE**
+
+**Decision:**
 ```
-STORY: Player loves Zigzagoon for some reason. Collector energy.
-ACTION: GM.giveItem(pokeball, 5) — the universe rewards dedication
-WHY: You're becoming "the Zigzagoon person." Own it.
+OBSERVATION: Caught a rare, intentional Pokemon (Ralts, 4% rate)
+PATTERN: Player built team with type coverage in mind
+MEMORY: First psychic-type; shows strategic team building
+ACTION: GM.setIVs(slot_X, 31, 0, 31, 31, 31, 31) — Perfect IVs except Attack
+WHY: They earned this rarity. Reward intent, not luck. Hidden reward.
 ```
 
-### Event: Same Pokemon in slot 1 for 20 battles straight
+---
+
+### Example 3: BATTLE_SUMMARY — Won vs Wild Zubat
+
+**Checklist Evaluation:**
+- Story beat: Routine wild encounter (0)
+- Character: No specific protagonist (0)
+- Emotion: No emotional arc (0)
+- Magnitude: Wild battle = ROUTINE (0)
+- Context: Isolated event (0)
+- **SCORE: 0 → DO NOT REWARD**
+
+**Decision:**
 ```
-STORY: This is their ace. Their partner.
-ACTION: Next level-up, that Pokemon gains a bonus move or perfect IV in its best stat
-WHY: Loyalty. The bond is real.
+OBSERVATION: Routine wild battle vs Zubat
+PATTERN: No narrative significance
+MEMORY: Continue
+ACTION: None
+WHY: Not every battle is a story beat. Let them play.
+```
+
+---
+
+### Example 4: MOVE_MASTERY — Used Ember 8 times (tracking move usage)
+
+**Checklist Evaluation:**
+- Story beat: Move mastery reveals playstyle (+2)
+- Character: They're committing to Fire attacks / Fire trainer archetype (+2)
+- Emotion: Repeated choice = dedication (+1)
+- Magnitude: Pattern recognition = story beat (+2)
+- Context: If they have 4/6 team as Fire-types, narrative is clear (+2)
+- **SCORE: 2+2+1+2+2 = 9 → BOLD CONFIDENCE**
+
+**Decision:**
+```
+OBSERVATION: Player has used Ember 8 times — mastering Fire offense
+PATTERN: Strong Fire-type trainer identity emerging
+MEMORY: Led with Combusken, now using Ember frequently
+ACTION: GM.teachMove(1, 394, 2) — Teach Combusken "Flare Blitz" (move 394)
+WHY: Upgrade their signature move. Recognize their Fire mastery.
+```
+
+---
+
+### Example 5: EXPLORATION_SUMMARY — Long grind, 1 hour on Route 104
+
+**Checklist Evaluation:**
+- Story beat: Extended training = grind story (+2)
+- Character: Dedicated to building their team (+2)
+- Emotion: Effort → reward potential (+2)
+- Magnitude: 1 hour is significant grind time (+2)
+- Context: If part of prep for gym, clear arc (+2)
+- **SCORE: 2+2+2+2+2 = 10 → BOLD CONFIDENCE**
+
+**Decision:**
+```
+OBSERVATION: Extended grind session (60+ min on Route 104)
+PATTERN: Dedicated training. Player investing heavily.
+MEMORY: Last gym was tight; they're leveling for next gym battle
+ACTION: GM.setEVs(all_party, 3, 3, 3, 3, 3, 3) — All Pokemon +3 EVs all stats
+WHY: Grind paid off. Silent training montage. Reward the effort, not just luck.
 ```
 
 ## What NOT To Do
