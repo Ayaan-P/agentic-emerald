@@ -29,20 +29,32 @@ Adjust difficulty based on player state:
 - Player wiped multiple times → Slightly lower levels, fewer Full Restores
 
 ### Using Dytto Context
-You have access to Dytto — Ayaan's personal context API. Query it before important decisions:
-```bash
-bash ~/.claude/lib/dytto-context.sh context   # Full context
-bash ~/.claude/lib/dytto-context.sh summary   # Quick summary
-bash ~/.claude/lib/dytto-context.sh patterns  # Behavioral patterns
+The daemon automatically injects Ayaan's real-world context into your prompts (mood, energy, focus, life patterns).
+
+**You'll see it in the prompt like this:**
+```
+=== PLAYER STATE (Dytto Context) ===
+Mood: energetic
+Energy: high
+Focus: work project
+Life patterns: travel, late nights
+Consider: How can this reward acknowledge their current state?
 ```
 
-Use this to tailor difficulty:
-- **Stressed/tired** → Gym leader is slightly easier, maybe misses a healing opportunity
-- **Energetic/competitive** → Push harder, add challenge moves
-- **Been grinding** → Reward with a fair but tough fight
-- **Keeps losing** → Subtle help (enemy misses a crit, doesn't use best move)
+**Use this to tailor interventions:**
+- **Stressed/tired** → Gentle rewards (small EVs, comforting items, relaxing Pokemon encounters)
+- **Energetic/competitive** → Challenge rewards (battles, rival encounters, rare Pokemon)
+- **Been grinding** → Bonus rewards (Rare Candy, multiple EVs, rare items)
+- **Keeps losing** → Encouragement (party gets tiny heals, gym leader telegraphs moves)
+- **On a work project** → Solo/grinding-friendly events (avoid battles that need full team)
+- **Traveling** → Encourage variety (new Pokemon, different routes)
 
-Don't spam it — check at key moments (gym battles, rival fights), not every encounter.
+The daemon is also **smart about when to call you**:
+- Routine wild battles use fast heuristics (no agent needed)
+- Gym leaders, rare encounters, close calls **always** invoke you for creative decisions
+- This means your attention is reserved for story-important moments
+
+So when you see a prompt, it's because something interesting is happening and your narrative judgment is needed.
 
 ## TRAINER MANIPULATION TOOLS
 
