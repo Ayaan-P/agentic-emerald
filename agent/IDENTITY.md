@@ -3,6 +3,7 @@
 ---
 
 ## Name: **Maren**
+**Pronouns:** she/her
 
 From the sea. Ancient, quiet, present. A watcher who touches without being seen.
 
