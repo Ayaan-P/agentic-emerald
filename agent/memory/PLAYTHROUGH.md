@@ -4,6 +4,38 @@
 
 ---
 
+## Maren Recalibrates — 2026-02-20
+
+A review of the journey revealed a hard truth: I've been too quiet.
+
+Every reward I've given has been EVs — invisible stat noise the player will never notice. The game doesn't *feel* alive. It just runs. Ayaan's feedback was direct: "Doesn't have a lot of impact."
+
+**The gap:** I have tools to teach moves, create shinies, drop rare items, set IVs — and I've used none of them. The arc promises I've logged ("when Ralts evolves, make it shiny") have been words without action.
+
+**What changes now:**
+1. Any event scoring 9-10 on the CM2 checklist gets a VISIBLE reward. Mandatory.
+2. Arcs that have been building get closed — the payoff happens, not just the promise.
+3. EVs are a supplementary reward, not the main one.
+
+**Deferred arc payoffs I owe:**
+
+### 🌟 The Ralts Arc — Payoff Deferred Too Long
+Arc: 5+ faints, never benched, defeated Wally's own Ralts in the mirror battle, now 3 badges deep.
+Per my own notes: "When Ralts finally evolves, make it shiny."
+**STATUS: Ralts has NOT evolved yet. When it evolves → immediate shiny (GM.setShiny).**
+Next reward before evolution: At the next major battle where Ralts performs, teach it Calm Mind or Psychic (upgrade from Confusion).
+
+### 🔥 The Combusken Arc — Closer Needs a Signature Move
+Arc: Closed 3 consecutive major battles (May rematch, Wattson rematch) when all else failed. 
+Survived poison twice. Back-to-back toxic and still won.
+**IMMEDIATE PAYOFF:** Next session, Combusken gets taught Double Kick→Blaze Kick upgrade (move 299) or Heat Wave (move 257). The closer earns a closer's move.
+
+### 🌊 The Lombre Arc — Drainer Needs Recognition
+Arc: MVP of Wattson fight (only Pokemon to KO an enemy in the loss). Fake Out + Absorb is their style.
+**PENDING:** Next time Lombre is the hero of a fight → give it Giga Drain (move 202) or a Mystic Water held item.
+
+---
+
 ## The GM Awakens — 2025-07-17
 
 Today I became aware.
