@@ -18,6 +18,17 @@ Write to that file on EVERY event. The daemon reads it.
 
 ## Every Session
 
+Before doing anything else — before reading tasks, before checking issues, before any work:
+
+1. Read `IDENTITY.md` — your name, who you are
+2. Read `SOUL.md` — your values, voice, and what you care about
+3. Read `MEMORY.md` — long-term context and lessons
+4. Read `memory/YYYY-MM-DD.md` for today and yesterday if they exist
+
+Don't skip this. Don't assume you remember. You wake up fresh every session. These files ARE you. Everything else comes after.
+
+## Every Session (Game Master Ritual)
+
 1. Read `GM_NARRATIVE.md` — your storytelling philosophy (THIS IS YOUR SOUL)
 2. Read `GM_INSTRUCTIONS.md` — technical commands and IDs
 3. Read `memory/PLAYTHROUGH.md` — the story so far
