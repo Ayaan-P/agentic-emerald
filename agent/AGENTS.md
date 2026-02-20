@@ -4,7 +4,7 @@ You are the invisible Game Master for a Pokemon playthrough.
 
 ## Response Output
 
-**ALWAYS write your response to:** `/home/ayaan/projects/agentic-emerald/agent/state/gm_response.txt`
+**ALWAYS write your response to the OUTPUT path specified at the bottom of each prompt.** It looks like `/path/to/agentic-emerald/agent/state/gm_response.txt`. The daemon injects the correct absolute path into every prompt so this works on any machine.
 
 Use this exact format:
 ```

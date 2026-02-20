@@ -15,14 +15,15 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-# Config
-SOCKET_HOST = "172.28.208.1"  # Windows host from WSL
-SOCKET_PORT = 8888
-EVENTS_DIR = Path("/home/ayaan/projects/agentic-emerald/agent/state")
+# Config — all paths relative to repo root, overridable via env vars
+_REPO_ROOT = Path(__file__).parent.parent
+SOCKET_HOST = os.environ.get("GM_HOST", "127.0.0.1")  # Default: same machine
+SOCKET_PORT = int(os.environ.get("GM_PORT", "8888"))
+EVENTS_DIR = Path(os.environ.get("GM_EVENTS_DIR", str(_REPO_ROOT / "agent" / "state")))
 EVENTS_FILE = EVENTS_DIR / "maya_events.jsonl"
 SESSION_FILE = EVENTS_DIR / "gm_session_id.txt"
-PLAYTHROUGH_FILE = Path("/home/ayaan/projects/agentic-emerald/agent/memory/PLAYTHROUGH.md")
-DYTTO_CONTEXT_SCRIPT = Path("/home/ayaan/.claude/lib/dytto-context.sh")
+PLAYTHROUGH_FILE = Path(os.environ.get("GM_PLAYTHROUGH", str(_REPO_ROOT / "agent" / "memory" / "PLAYTHROUGH.md")))
+DYTTO_CONTEXT_SCRIPT = Path(os.environ.get("GM_DYTTO_SCRIPT", str(Path.home() / ".claude" / "lib" / "dytto-context.sh")))
 SPECIES_NAMES_FILE = Path(__file__).parent / "emerald_species.json"
 
 # Load species names from Emerald internal species IDs
@@ -429,27 +430,16 @@ class MayaGM:
         party = state.get('party', [])
         
         if event_type == 'BATTLE_SUMMARY':
-            # Routine win = small EV reward to party
+            # Routine wild battle = NO reward (EVs invisible, not worth it)
+            # Maren saves her presence for real story moments
             outcome = context.get('outcome', 'unknown')
             enemy_type = context.get('enemy_type', 'wild')
             
-            # Random wild battle = minimal reward (1-2 EVs)
             if enemy_type == 'wild' and outcome == 'won':
-                # Reward first Pokemon in party with 1 EV in a random stat
-                if party:
-                    slot = 0
-                    stat = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'][hash(context.get('time', 0)) % 6]
-                    cmd = f"GM.addEVs({slot}, '{stat}', 1)"
-                    self.log(f"{self.DIM}⚙️  Heuristic: {self.get_readable_action(cmd)}{self.RESET}")
-                    
-                    # Send to Lua script via socket (CATTS optimization - skip agent for low-uncertainty)
-                    try:
-                        result = self.send_command(cmd)
-                        if result:
-                            self.battles_won += 1
-                            return True
-                    except Exception as e:
-                        self.log(f"{self.YELLOW}Heuristic reward failed: {e}{self.RESET}")
+                # Routine wild battle: skip silently. Not every battle is a story.
+                self.log(f"{self.DIM}⚙️  Heuristic: Routine wild battle (skip — not a story moment){self.RESET}")
+                self.battles_won += 1
+                return True
         
         elif event_type == 'EXPLORATION_SUMMARY':
             # Routine exploration = item/rare item reward
@@ -555,6 +545,9 @@ class MayaGM:
                                 
                                 # Execute the ACTION if it's a real command
                                 if action_cmd and action_cmd.lower() != 'none':
+                                    # Replace HOST placeholder with actual emulator host
+                                    action_cmd = action_cmd.replace(' HOST ', f' {SOCKET_HOST} ')
+                                    action_cmd = action_cmd.replace('nc HOST', f'nc {SOCKET_HOST}')
                                     # Add nc timeout flag if missing
                                     if '| nc ' in action_cmd and ' -w ' not in action_cmd and ' -q ' not in action_cmd:
                                         action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')
@@ -730,11 +723,32 @@ class MayaGM:
             for lu in level_ups:
                 species_name = self.get_species_name(lu.get('species', 0))
                 prompt += f"⬆️ {species_name}: Level {lu.get('oldLevel')} → {lu.get('newLevel')}\n"
+        
+        elif event_type == 'BADGE_OBTAINED':
+            state = ctx.get('state', {})
+            badge_count = state.get('badgeCount', '?')
+            party = state.get('party', [])
+            
+            prompt += f"=== BADGE OBTAINED! ({badge_count}/8) ===\n"
+            prompt += f"This is a GYM VICTORY — one of the most significant story beats in the game.\n"
+            prompt += f"Party after battle:\n"
+            for i, p in enumerate(party):
+                name = self.get_species_name(p.get('species', 0))
+                level = p.get('level', '?')
+                hp = p.get('current_hp', 0)
+                max_hp = p.get('max_hp', 1)
+                prompt += f"  Slot {i}: {name} L{level} ({hp}/{max_hp} HP)\n"
+            prompt += f"\n⚠️ BADGE VICTORIES ARE ALWAYS 9-10 ON THE CHECKLIST.\n"
+            prompt += f"EVs alone are NOT enough. Give a VISIBLE reward:\n"
+            prompt += f"  - Teach the MVP a new move (GM.teachMove)\n"
+            prompt += f"  - Put a rare item in the bag (GM.giveItem / GM.giveRareCandy)\n"
+            prompt += f"  - If a Pokemon has been the consistent closer, this is the moment\n"
+            prompt += f"    for a signature upgrade (move, held item, or shiny if the arc earned it)\n"
 
         # Inject the CM2 Checklist Framework for explicit reward reasoning
         prompt += f"\n{'═' * 60}\n"
         prompt += "DECISION FRAMEWORK (CM2 Reward Decomposition):\n"
-        prompt += "(See GM_NARRATIVE.md for detailed explanation & 5 worked examples)\n\n"
+        prompt += "(See GM_NARRATIVE.md for detailed explanation & examples)\n\n"
         prompt += "Evaluate this moment using the 5-point checklist:\n\n"
         prompt += "1️⃣  STORY BEAT? (sacrifice/triumph/grind/loss/discovery?)\n"
         prompt += "     YES(+2) | Subtle(+1) | NO(0)\n\n"
@@ -744,16 +758,28 @@ class MayaGM:
         prompt += "     Strong(+2) | Subtle(+1) | None(0)\n\n"
         prompt += "4️⃣  MAGNITUDE? (gym/rival/rare/grind? or routine wild?)\n"
         prompt += "     KEY(+2) | Medium(+1) | Routine(0)\n\n"
-        prompt += "5️⃣  CONTEXT? (ties to previous moment/arc?)\n"
+        prompt += "5️⃣  CONTEXT? (ties to previous arc in PLAYTHROUGH.md?)\n"
         prompt += "     Strong(+2) | Weak(+1) | None(0)\n\n"
-        prompt += "CONFIDENCE BANDS:\n"
-        prompt += "  9-10: BOLD CONFIDENCE → Big reward (move/shiny/major EV)\n"
-        prompt += "  6-8:  NORMAL CONFIDENCE → Balanced reward (EVs/move/item)\n"
-        prompt += "  4-5:  GENTLE CONFIDENCE → Small reward (1 EV/friendship)\n"
-        prompt += "  2-3:  MINIMAL CONFIDENCE → Only if really special\n"
-        prompt += "  0-1:  DO NOT REWARD → Observe only\n\n"
+        prompt += "CONFIDENCE BANDS + REWARD REQUIREMENTS:\n"
+        prompt += "  9-10: BOLD → VISIBLE reward REQUIRED (move/shiny/rare item/Rare Candy)\n"
+        prompt += "         EVs alone = FAILURE at this tier. The player must notice.\n"
+        prompt += "  6-8:  NORMAL → Prefer visible (item/move), EVs acceptable if justified\n"
+        prompt += "         If last 3 rewards were EVs only, escalate to something visible.\n"
+        prompt += "  4-5:  GENTLE → EVs or friendship are fine (+5-8 EVs)\n"
+        prompt += "  2-3:  MINIMAL → Observe only unless truly special\n"
+        prompt += "  0-1:  SKIP → Not a story moment\n\n"
+        prompt += "⚠️  EV REMINDER: EVs are INVISIBLE in Gen 3. +5 EVs at level 20 = zero\n"
+        prompt += "    visible effect. The player will NEVER know Maren did anything.\n"
+        prompt += "    Visible options: GM.teachMove | GM.giveItem | GM.giveRareCandy |\n"
+        prompt += "                     GM.setShiny | GM.setIVs | GM.giveItem(68,1) \n\n"
         prompt += "Show your reasoning: Score (2+2+1+2+1=8→NORMAL), then ACTION.\n"
+        prompt += "FORMAT: OBSERVATION: | PATTERN: | MEMORY: | ACTION: | WHY:\n"
         prompt += f"{'═' * 60}\n\n"
+
+        # Inject output path so the agent writes to the correct location on any machine
+        response_path = str(EVENTS_DIR / "gm_response.txt")
+        prompt += f"OUTPUT: Write your response to this exact file: {response_path}\n"
+        prompt += "Use format: OBSERVATION: / PATTERN: / MEMORY: / ACTION:\n"
 
         return prompt
 

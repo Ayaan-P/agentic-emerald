@@ -549,6 +549,9 @@ class PokemonGM:
                     
                     # Execute action if present
                     if action_cmd and action_cmd.lower() != 'none':
+                        # Replace HOST placeholder with actual emulator host
+                        action_cmd = action_cmd.replace(' HOST ', f' {self.socket_host} ')
+                        action_cmd = action_cmd.replace('nc HOST', f'nc {self.socket_host}')
                         # Add nc timeout flag if missing
                         if '| nc ' in action_cmd and ' -w ' not in action_cmd:
                             action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')

@@ -152,10 +152,11 @@ Always log move rewards with narrative context:
 ```
 
 ## Command Format
-Send via netcat:
+Send via netcat (the daemon substitutes the correct HOST automatically):
 ```bash
-echo 'GM.setEnemyLevel(1, 25)' | nc 172.28.208.1 8888
+echo 'GM.setEnemyLevel(1, 25)' | nc HOST 8888
 ```
+(HOST = `127.0.0.1` for same machine, or your emulator's IP if remote)
 
 ## Key Species IDs
 - 252: Treecko → 253: Grovyle → 254: Sceptile

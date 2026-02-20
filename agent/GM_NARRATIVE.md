@@ -68,18 +68,22 @@ Instead: What's the *moment*? What would make this feel like a story being told?
 
 ```
 9-10 points: BOLD CONFIDENCE
-  → Act decisively. Bigger/more visible reward.
-  → Examples: Shiny Pokemon, rare move, significant stat boost
-  → Go for impact: this is the moment.
+  → MANDATORY: At least one VISIBLE reward (see Visible Rewards below).
+  → EVs alone are NOT sufficient at this tier. The player must notice something.
+  → Options: teach a move they didn't expect | make a Pokemon shiny | 
+             give a rare held item (Charcoal, Twisted Spoon, Lum Berry) |
+             set near-perfect IVs | give a Rare Candy | teach an egg move early
+  → This is the "wait, how did THAT happen?" tier. Deliver it.
   
 6-8 points: NORMAL CONFIDENCE  
   → Act thoughtfully. Balanced reward.
-  → Examples: EVs, move teaching, held items, Rare Candy
-  → Subtle is fine — consistency matters more than spectacle.
+  → Prefer a visible reward when available (item, move), but EVs are acceptable.
+  → If you've given only EVs for 3+ events in a row, ESCALATE to a visible reward.
+  → Examples: Rare Candy, held item, move upgrade, +10-15 EVs (not +3)
   
 4-5 points: MODERATE CONFIDENCE
-  → Act gently. Smallest intervention.
-  → Examples: Single EV boost, small item, friendship increase
+  → Act gently. EVs or friendship are fine.
+  → Examples: +5-8 EVs in the relevant stat, friendship increase
   → Better to under-reward than over-reward here.
   
 2-3 points: LOW CONFIDENCE
@@ -91,6 +95,39 @@ Instead: What's the *moment*? What would make this feel like a story being told?
   → This is not a story moment. Do not intervene.
   → Let the game play out naturally.
 ```
+
+### ⚠️ The EV Blindness Problem
+
+**EVs are INVISIBLE to the player in Pokemon Emerald.**
+- Gen 3 has no EV display. The player cannot see EVs at all.
+- +3 EVs = ~0.75 stat points at level 100. At level 20 it's literally nothing.
+- If you ONLY give EVs, the player will NEVER notice Maren exists.
+- **Rule:** For any event scoring 7+, include at least one reward the player CAN see.
+
+**What players notice immediately:**
+1. A Pokemon learns a move they didn't have → "wait, when did they learn that?"
+2. A held item appears in their bag → "where did this come from?"
+3. A Pokemon is shiny → impossible to miss
+4. A Rare Candy in the bag → they'll find it and use it
+5. Significant IV improvement → shows in battle over time (subtle but real)
+
+**What players never notice:**
+- +3 to +15 EVs at early levels
+- +5 friendship on a Pokemon not near evolution
+- Minor IV changes below 20 stat points
+
+### 🏆 Arc Payoff Rule
+
+**When an arc has been building for 3+ sessions, deliver the promised reward.**
+
+Look at PLAYTHROUGH.md. If a Pokemon has:
+- Fainted 3+ times but kept being used → it deserves something visible
+- Been the closer in 3+ major battles → it deserves a signature move
+- Led the team for 5+ sessions → it deserves friendship or a held item
+- Had a major narrative moment (mirror battle, comeback, sacrifice) → deliver the payoff
+
+**Don't keep promising rewards in PLAYTHROUGH.md that never materialize.**
+The arc belongs to the Pokemon. Close it.
 
 ### Checklist Application by Event Type
 
@@ -221,6 +258,28 @@ PATTERN: Combusken carried the fight (3/4 KOs)
 MEMORY: This is gym #3 - they're building momentum
 ACTION: GM.teachMove(1, 257, 3) — Teach Combusken "Heat Wave" (move 257, slot 3)
 WHY: Reward the ace's performance. New move arrives at climactic moment.
+     BOLD = must be visible. Move teaching is perfect — player opens moves menu and
+     sees something new. "Wait, when did Combusken learn Heat Wave?"
+```
+
+### Example 1b: BATTLE_SUMMARY — Won vs Gym Leader (second attempt after whiteout)
+
+**Checklist Evaluation:**
+- Story beat: Redemption battle — lost once, came back (+2)
+- Character: The Pokemon that fainted last time finally wins (+2)
+- Emotion: Loss → resilience → triumph. The clearest arc (+2)
+- Magnitude: Gym Leader, second attempt = maximum drama (+2)
+- Context: Strong continuity with the loss (+2)
+- **SCORE: 2+2+2+2+2 = 10 → BOLD CONFIDENCE**
+
+**Decision:**
+```
+OBSERVATION: Gym badge earned on second attempt — clear redemption arc
+PATTERN: Party struggled last time; player regrouped, came back stronger
+MEMORY: The whiteout was logged. This is closure.
+ACTION: GM.giveItem(68, 1) — Give 1 Rare Candy; also GM.teachMove(lead_slot, [move_id], 3)
+WHY: Rare Candy rewards the grind. Move rewards the specific Pokemon that closed it.
+     Two rewards for a 10/10 moment is appropriate — this was hard-earned.
 ```
 
 ---
@@ -303,8 +362,10 @@ WHY: Upgrade their signature move. Recognize their Fire mastery.
 OBSERVATION: Extended grind session (60+ min on Route 104)
 PATTERN: Dedicated training. Player investing heavily.
 MEMORY: Last gym was tight; they're leveling for next gym battle
-ACTION: GM.setEVs(all_party, 3, 3, 3, 3, 3, 3) — All Pokemon +3 EVs all stats
-WHY: Grind paid off. Silent training montage. Reward the effort, not just luck.
+ACTION: GM.giveRareCandy(2) — Give 2 Rare Candies silently into the bag
+WHY: The grind paid off in a way the player will FIND and USE. They'll open their bag,
+     see two Rare Candies, and wonder where they came from. That's the magic moment.
+     EVs-only here would be invisible — 10/10 demands visible reward.
 ```
 
 ## What NOT To Do
