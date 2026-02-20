@@ -442,13 +442,14 @@ class MayaGM:
                     cmd = f"GM.addEVs({slot}, '{stat}', 1)"
                     self.log(f"{self.DIM}⚙️  Heuristic: {self.get_readable_action(cmd)}{self.RESET}")
                     
-                    # Execute locally (no network call, just game memory)
+                    # Send to Lua script via socket (CATTS optimization - skip agent for low-uncertainty)
                     try:
-                        subprocess.run(cmd, shell=True, timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                        self.battles_won += 1
-                        return True
-                    except:
-                        pass
+                        result = self.send_command(cmd)
+                        if result:
+                            self.battles_won += 1
+                            return True
+                    except Exception as e:
+                        self.log(f"{self.YELLOW}Heuristic reward failed: {e}{self.RESET}")
         
         elif event_type == 'EXPLORATION_SUMMARY':
             # Routine exploration = item/rare item reward
@@ -460,8 +461,14 @@ class MayaGM:
             # Normal catch = small friendship boost (no agent needed)
             if party:
                 slot = 0
-                self.log(f"{self.DIM}⚙️  Heuristic: {self.get_readable_action(f'GM.setFriendship({slot}, 50)')}{self.RESET}")
-                return True
+                cmd = f"GM.setFriendship({slot}, 50)"
+                self.log(f"{self.DIM}⚙️  Heuristic: {self.get_readable_action(cmd)}{self.RESET}")
+                try:
+                    result = self.send_command(cmd)
+                    if result:
+                        return True
+                except Exception as e:
+                    self.log(f"{self.YELLOW}Heuristic reward failed: {e}{self.RESET}")
         
         # Default: let agent handle it
         return False
