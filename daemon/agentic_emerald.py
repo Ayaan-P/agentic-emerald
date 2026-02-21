@@ -659,29 +659,30 @@ class PokemonGM:
         threading.Thread(target=run_agent, daemon=True).start()
     
     def _call_clawdbot(self, prompt: str) -> str:
-        """Call agent via Clawdbot CLI (local embedded mode, reads from stdout)"""
-        full_prompt = f"{self.system_prompt}\n\n---\n\n{prompt}"
+        """Call agent via Clawdbot CLI - agent writes response to gm_response.txt"""
+        # Clear previous response
+        if self.response_file.exists():
+            self.response_file.unlink()
         
         result = subprocess.run(
-            ["clawdbot", "agent", "--local", "--message", full_prompt, "--json"],
+            ["clawdbot", "agent", "--agent", self.agent_id,
+             "--session-id", self.session_id, "--message", prompt],
             capture_output=True, text=True, timeout=120
         )
         
-        if result.returncode == 0 and result.stdout.strip():
-            try:
-                import json as _json
-                data = _json.loads(result.stdout)
-                # Extract response text from JSON envelope
-                response = (data.get('response') or data.get('text') or
-                           data.get('content') or data.get('message') or '')
-                if response:
-                    return response.strip()
-            except Exception:
-                # Fallback: return raw stdout if not valid JSON
-                return result.stdout.strip()
-        
-        if result.stderr:
+        if result.returncode != 0:
             self.log(f"⚠️ Clawdbot error: {result.stderr[:120]}")
+            return ""
+        
+        # Poll for agent to write response file (up to 90 seconds)
+        for _ in range(90):
+            time.sleep(1)
+            if self.response_file.exists():
+                response = self.response_file.read_text().strip()
+                if response:
+                    return response
+        
+        self.log("⚠️ Clawdbot: timed out waiting for gm_response.txt")
         return ""
     
     def _call_anthropic_direct(self, prompt: str) -> str:
