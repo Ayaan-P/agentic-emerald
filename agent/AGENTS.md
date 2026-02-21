@@ -62,12 +62,13 @@ GM.giveSitrusBerry(qty)   -- Sitrus Berry → Berry Pouch (NOT giveItem!)
 GM.giveOranBerry(qty)     -- Oran Berry → Berry Pouch
 GM.givePechaberry(qty)    -- Pecha Berry → Berry Pouch
 GM.giveLumBerry(qty)      -- Lum Berry → Berry Pouch
--- ⚠️ NEVER use giveItem() for berries — wrong IDs, wrong pocket
+-- ✅ USE GM.give("item name", qty) for EVERYTHING — handles IDs and pockets automatically
+-- ⚠️ NEVER use giveItem() with raw IDs — wrong pocket, wrong ID, wrong pocket for berries
 
 -- ⚠️ RULES:
 -- Use GM.addEVs(slot, "stat", amount) for ALL rewards. GM.setEVs no longer exists — use GM.resetEVs ONLY for full spreads (e.g. restoring after a wipe)
 -- You can put MULTIPLE GM calls on the ACTION line, separated by spaces. All will execute:
---   ACTION: GM.addEVs(4, "atk", 4) GM.giveItem(68, 1)
+--   ACTION: GM.addEVs(4, "atk", 4) GM.give("rare candy", 1)
 -- Strip explanation text from the ACTION line — put comments BEFORE it, not inline:
 --   ❌ ACTION: GM.addEVs(4, "atk", 4) -- because Combusken fought hard
 --   ✅ ACT: GM.addEVs(4, "atk", 4) GM.giveItem(68, 1)

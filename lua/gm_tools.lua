@@ -328,6 +328,61 @@ function GM.giveLumBerry(quantity) return GM.giveItem(141, quantity, GM.POCKET.B
 function GM.giveLeppaberry(quantity) return GM.giveItem(138, quantity, GM.POCKET.BERRIES) end   -- Leppa Berry (restores PP)
 
 -- =============================================================================
+-- ITEM LOOKUP TABLE — GM.give("item name", quantity)
+-- Use this instead of raw IDs. Names are case-insensitive, spaces/hyphens ok.
+-- =============================================================================
+
+local ITEM_LOOKUP = {
+    -- Pokeballs
+    ["pokeball"]     = {id=4,   pocket=1}, ["poke ball"]   = {id=4,   pocket=1},
+    ["greatball"]    = {id=3,   pocket=1}, ["great ball"]  = {id=3,   pocket=1},
+    ["ultraball"]    = {id=2,   pocket=1}, ["ultra ball"]  = {id=2,   pocket=1},
+    ["masterball"]   = {id=1,   pocket=1}, ["master ball"] = {id=1,   pocket=1},
+    -- Healing items
+    ["potion"]       = {id=17,  pocket=0},
+    ["superpotion"]  = {id=26,  pocket=0}, ["super potion"]  = {id=26,  pocket=0},
+    ["hyperpotion"]  = {id=25,  pocket=0}, ["hyper potion"]  = {id=25,  pocket=0},
+    ["maxpotion"]    = {id=24,  pocket=0}, ["max potion"]    = {id=24,  pocket=0},
+    ["fullrestore"]  = {id=23,  pocket=0}, ["full restore"]  = {id=23,  pocket=0},
+    ["revive"]       = {id=28,  pocket=0},
+    ["maxrevive"]    = {id=29,  pocket=0}, ["max revive"]    = {id=29,  pocket=0},
+    ["antidote"]     = {id=14,  pocket=0},
+    ["fullheal"]     = {id=27,  pocket=0}, ["full heal"]     = {id=27,  pocket=0},
+    -- Battle items
+    ["rarecandy"]    = {id=68,  pocket=0}, ["rare candy"]    = {id=68,  pocket=0},
+    ["xattack"]      = {id=78,  pocket=0}, ["x attack"]      = {id=78,  pocket=0},
+    ["xdefend"]      = {id=79,  pocket=0}, ["x defend"]      = {id=79,  pocket=0},
+    ["xspeed"]       = {id=80,  pocket=0}, ["x speed"]       = {id=80,  pocket=0},
+    ["xspecial"]     = {id=81,  pocket=0}, ["x special"]     = {id=81,  pocket=0},
+    ["xaccuracy"]    = {id=83,  pocket=0}, ["x accuracy"]    = {id=83,  pocket=0},
+    ["guardspec"]    = {id=85,  pocket=0}, ["guard spec"]    = {id=85,  pocket=0},
+    ["direhit"]      = {id=84,  pocket=0}, ["dire hit"]      = {id=84,  pocket=0},
+    -- Berries (pocket 3!)
+    ["cheriberrry"]  = {id=133, pocket=3}, ["cheri berry"]   = {id=133, pocket=3},
+    ["pechaberry"]   = {id=135, pocket=3}, ["pecha berry"]   = {id=135, pocket=3},
+    ["rawstberry"]   = {id=136, pocket=3}, ["rawst berry"]   = {id=136, pocket=3},
+    ["leppaberry"]   = {id=138, pocket=3}, ["leppa berry"]   = {id=138, pocket=3},
+    ["oranberry"]    = {id=139, pocket=3}, ["oran berry"]    = {id=139, pocket=3},
+    ["lumberry"]     = {id=141, pocket=3}, ["lum berry"]     = {id=141, pocket=3},
+    ["sitrusberry"]  = {id=142, pocket=3}, ["sitrus berry"]  = {id=142, pocket=3},
+    ["aspearberry"]  = {id=137, pocket=3}, ["aspear berry"]  = {id=137, pocket=3},
+}
+
+-- Give item by name — Maren should always use this, not raw IDs
+function GM.give(itemName, quantity)
+    quantity = quantity or 1
+    local key = itemName:lower():gsub("%-", " ")
+    local entry = ITEM_LOOKUP[key]
+    if not entry then
+        console:log("❌ Unknown item: '" .. itemName .. "' — check ITEM_LOOKUP table")
+        return false
+    end
+    GM.giveItem(entry.id, quantity, entry.pocket)
+    console:log("🎁 Gave " .. quantity .. "x " .. itemName)
+    return true
+end
+
+-- =============================================================================
 -- SUBSTRUCT ORDER FOR ENCRYPTION
 -- =============================================================================
 
