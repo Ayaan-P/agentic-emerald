@@ -223,6 +223,18 @@ Nincada. A critical hit. Second badge.
 
 ---
 
+## Ralts Becomes Kirlia — L20
+
+At L20, Ralts evolved into Kirlia.
+
+The status bingo is complete. The faints are in the double digits. The player never stopped trusting it. And now it's glowing — literally. Maren made it shiny.
+
+This is what the faith was for.
+
+Kirlia: Shiny. Still standing.
+
+---
+
 ## Combusken Learns Bulk Up — L28
 
 At L28, Combusken replaced Focus Energy with Bulk Up. The fighter who fought through poison, paralysis, and crit faints now has a setup move — Attack and Defense rising simultaneously. It was always the ace. Now it's building toward something bigger.

@@ -605,31 +605,43 @@ end
 
 -- Add EVs to a single stat by name (hp/atk/def/spd/spatk/spdef), capped at 255
 function GM.addEVs(slot, statName, amount)
-    GM.modifyPartyPokemon(slot, function(pokemon)
-        local evSlot = pokemon.typeToSlot[3]
-        local evData = pokemon.decrypted[evSlot]
-        -- Read current EVs
-        local word0 = evData[0]
-        local word1 = evData[1]
-        local curHp    = word0 & 0xFF
-        local curAtk   = (word0 >> 8) & 0xFF
-        local curDef   = (word0 >> 16) & 0xFF
-        local curSpd   = (word0 >> 24) & 0xFF
-        local curSpatk = word1 & 0xFF
-        local curSpdef = (word1 >> 8) & 0xFF
-        -- Add to target stat
-        local s = statName:lower()
-        if     s == "hp"    then curHp    = math.min(255, curHp    + amount)
-        elseif s == "atk"   then curAtk   = math.min(255, curAtk   + amount)
-        elseif s == "def"   then curDef   = math.min(255, curDef   + amount)
-        elseif s == "spd"   then curSpd   = math.min(255, curSpd   + amount)
-        elseif s == "spatk" then curSpatk = math.min(255, curSpatk + amount)
-        elseif s == "spdef" then curSpdef = math.min(255, curSpdef + amount)
-        end
-        -- Write back
-        evData[0] = curHp | (curAtk << 8) | (curDef << 16) | (curSpd << 24)
-        evData[1] = (word1 & 0xFFFF0000) | (curSpatk & 0xFF) | ((curSpdef & 0xFF) << 8)
+    -- Safety: validate slot range
+    local count = GM.getPartyCount()
+    if slot < 0 or slot >= count then
+        console:log("⚠️  addEVs: slot " .. slot .. " out of range (party=" .. count .. "), skipping")
+        return false
+    end
+    local ok, err = pcall(function()
+        GM.modifyPartyPokemon(slot, function(pokemon)
+            local evSlot = pokemon.typeToSlot[3]
+            local evData = pokemon.decrypted[evSlot]
+            -- Read current EVs
+            local word0 = evData[0]
+            local word1 = evData[1]
+            local curHp    = word0 & 0xFF
+            local curAtk   = (word0 >> 8) & 0xFF
+            local curDef   = (word0 >> 16) & 0xFF
+            local curSpd   = (word0 >> 24) & 0xFF
+            local curSpatk = word1 & 0xFF
+            local curSpdef = (word1 >> 8) & 0xFF
+            -- Add to target stat
+            local s = statName:lower()
+            if     s == "hp"    then curHp    = math.min(255, curHp    + amount)
+            elseif s == "atk"   then curAtk   = math.min(255, curAtk   + amount)
+            elseif s == "def"   then curDef   = math.min(255, curDef   + amount)
+            elseif s == "spd"   then curSpd   = math.min(255, curSpd   + amount)
+            elseif s == "spatk" then curSpatk = math.min(255, curSpatk + amount)
+            elseif s == "spdef" then curSpdef = math.min(255, curSpdef + amount)
+            end
+            -- Write back
+            evData[0] = curHp | (curAtk << 8) | (curDef << 16) | (curSpd << 24)
+            evData[1] = (word1 & 0xFFFF0000) | (curSpatk & 0xFF) | ((curSpdef & 0xFF) << 8)
+        end)
     end)
+    if not ok then
+        console:log("⚠️  addEVs failed (mid-evolution?): " .. tostring(err))
+        return false
+    end
     console:log("💪 addEVs slot " .. slot .. " +" .. amount .. " " .. statName)
     return true
 end
