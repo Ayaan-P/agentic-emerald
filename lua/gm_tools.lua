@@ -586,6 +586,19 @@ function GM.setIVs(slot, hp, atk, def, spd, spatk, spdef)
     return true
 end
 
+-- setEVs: safe alias — treats non-zero values as ADD, zeros as "no change"
+-- This preserves backward compat with old Maren responses while preventing overwrites
+function GM.setEVs(slot, hp, atk, def, spd, spatk, spdef)
+    if hp    > 0 then GM.addEVs(slot, "hp",    hp)    end
+    if atk   > 0 then GM.addEVs(slot, "atk",   atk)   end
+    if def   > 0 then GM.addEVs(slot, "def",   def)   end
+    if spd   > 0 then GM.addEVs(slot, "spd",   spd)   end
+    if spatk > 0 then GM.addEVs(slot, "spatk", spatk) end
+    if spdef > 0 then GM.addEVs(slot, "spdef", spdef) end
+    console:log("💪 setEVs (additive) slot " .. slot)
+    return true
+end
+
 -- Reset EVs to exact values (0-255 each) — DESTRUCTIVE, use only for full resets
 -- For incremental rewards, use GM.addEVs() instead
 function GM.resetEVs(slot, hp, atk, def, spd, spatk, spdef)
