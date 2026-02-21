@@ -624,6 +624,11 @@ class PokemonGM:
                     
                     # Execute action if present
                     if action_cmd and action_cmd.lower() != 'none':
+                        # Auto-wrap bare GM.* calls (e.g. "GM.giveItem(68,1)")
+                        # into proper shell format before HOST replacement
+                        import re as _re
+                        if _re.match(r'^GM\.\w+\(', action_cmd.strip()):
+                            action_cmd = f"echo '{action_cmd.strip()}' | nc HOST {self.socket_port}"
                         # Replace HOST placeholder with actual emulator host
                         action_cmd = action_cmd.replace(' HOST ', f' {self.socket_host} ')
                         action_cmd = action_cmd.replace('nc HOST', f'nc {self.socket_host}')
