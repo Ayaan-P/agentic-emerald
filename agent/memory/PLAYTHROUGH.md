@@ -223,6 +223,30 @@ Nincada. A critical hit. Second badge.
 
 ---
 
+## Combusken Learns Bulk Up — L28
+
+At L28, Combusken replaced Focus Energy with Bulk Up. The fighter who fought through poison, paralysis, and crit faints now has a setup move — Attack and Defense rising simultaneously. It was always the ace. Now it's building toward something bigger.
+
+Moveset after: Double Kick, Ember, Peck(?), Bulk Up.
+
+---
+
+## Ralts' Status Bingo — TRULY Complete
+
+Ralts has now been hit with every major status effect in the game:
+- **Poison** — Tentacool, Poison Sting (multiple times)
+- **Confusion** — Tentacool, Supersonic; Skitty, Confuse Ray; enemy Meditite
+- **Attract** — Skitty
+- **Paralysis** — Thunder Wave (Electrike in gym)
+- **Burn** — Numel, Ember
+- **Sleep** — Slugma, Yawn (the one I thought I'd missed)
+
+Every form of adversity. I declared the bingo complete after burn, then Slugma added sleep. The game finished what I started.
+
+The player has never benched Ralts permanently. Not after the sixth faint. Not after the Wally battle. Not after burn. Not after sleep. The faith is unconditional.
+
+---
+
 ## Wally Encounter — The Mirror
 
 **Location:** Outside Mauville Gym

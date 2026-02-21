@@ -586,8 +586,9 @@ function GM.setIVs(slot, hp, atk, def, spd, spatk, spdef)
     return true
 end
 
--- Set EVs (0-255 each, total max 510)
-function GM.setEVs(slot, hp, atk, def, spd, spatk, spdef)
+-- Reset EVs to exact values (0-255 each) — DESTRUCTIVE, use only for full resets
+-- For incremental rewards, use GM.addEVs() instead
+function GM.resetEVs(slot, hp, atk, def, spd, spatk, spdef)
     GM.modifyPartyPokemon(slot, function(pokemon)
         -- 3 = EV/condition substruct
         local evSlot = pokemon.typeToSlot[3]

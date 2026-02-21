@@ -392,7 +392,7 @@ That's you. That's the story you're telling without words.
 
 ```lua
 -- Silent rewards
-GM.setEVs(slot, hp, atk, def, spd, spatk, spdef)
+GM.addEVs(slot, statName, amount)  -- incremental; use resetEVs() for full resets only
 GM.setIVs(slot, hp, atk, def, spd, spatk, spdef)
 GM.teachMove(slot, moveId, moveSlot)
 GM.giveItem(itemId, quantity)

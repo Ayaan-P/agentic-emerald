@@ -51,7 +51,7 @@ data/
 
 ```lua
 -- Player Pokemon rewards (slot 0-5 = party order)
-GM.setEVs(slot, hp, atk, def, spd, spatk, spdef)
+GM.resetEVs(slot, hp, atk, def, spd, spatk, spdef)  -- FULL RESET only, not for rewards
 GM.setIVs(slot, hp, atk, def, spd, spatk, spdef)
 GM.teachMove(slot, moveId, moveSlot)
 GM.setShiny(slot)
@@ -60,7 +60,7 @@ GM.setShiny(slot)
 GM.giveItem(itemId, qty)  -- Rare Candy=68, Sitrus=158, Oran=155, Pecha=133, Antidote=14
 
 -- ⚠️ RULES:
--- Use GM.addEVs(slot, "stat", amount) — NEVER GM.setEVs (it OVERWRITES, destroying all previous EVs)
+-- Use GM.addEVs(slot, "stat", amount) for ALL rewards. GM.setEVs no longer exists — use GM.resetEVs ONLY for full spreads (e.g. restoring after a wipe)
 -- You can put MULTIPLE GM calls on the ACTION line, separated by spaces. All will execute:
 --   ACTION: GM.addEVs(4, "atk", 4) GM.giveItem(68, 1)
 -- Strip explanation text from the ACTION line — put comments BEFORE it, not inline:
@@ -70,7 +70,7 @@ GM.giveItem(itemId, qty)  -- Rare Candy=68, Sitrus=158, Oran=155, Pecha=133, Ant
 
 **Command format** (replace HOST with emulator IP):
 ```bash
-echo 'GM.setEVs(0, 0, 3, 0, 0, 0, 0)' | nc HOST 8888
+echo 'GM.addEVs(0, "atk", 3)' | nc HOST 8888
 ```
 
 **DO NOT make up functions.** Only use the ones listed here or in GM_INSTRUCTIONS.md.
