@@ -581,10 +581,16 @@ class PokemonGM:
                     # Save to session history if persistent
                     self._add_to_session_history(event_type, prompt, response_text)
                     
-                    action_cmd = None
-                    for line in response_text.split('\n')[:10]:
+                    import re as _re
+
+                    def extract_gm_calls(text):
+                        """Extract all clean GM.func(args) calls from a text block."""
+                        return _re.findall(r'GM\.\w+\([^)]*\)', text)
+
+                    action_cmds = []  # All GM calls to execute
+                    action_cmd = None  # Last ACTION: line (for reward classification)
+                    for line in response_text.split('\n')[:15]:
                         if line.strip():
-                            # Color-code different response types
                             if line.startswith('OBSERVATION:'):
                                 label = f"{C.CYAN}OBS{C.RESET}"
                                 content = line.split(':', 1)[1].strip()
@@ -601,57 +607,65 @@ class PokemonGM:
                                 label = f"{C.DIM}...{C.RESET}"
                                 content = line.strip()
                             print(f"  {label}  {content}")
-                            
+
+                            # Extract ALL GM calls from every line (not just ACTION:)
+                            calls = extract_gm_calls(line)
+                            action_cmds.extend(calls)
                             if line.strip().startswith('ACTION:'):
                                 action_cmd = line.split('ACTION:', 1)[1].strip()
-                    
+
                     print(f"  {C.DIM}{'─' * 56}{C.RESET}")
-                    
-                    # Classify reward visibility before executing
-                    reward_type = self._classify_reward(action_cmd)
+
+                    # Classify reward for drought tracking (use first action or action_cmd)
+                    classify_target = action_cmds[0] if action_cmds else action_cmd
+                    reward_type = self._classify_reward(classify_target)
                     self.reward_history.append(reward_type)
                     if len(self.reward_history) > 10:
                         self.reward_history = self.reward_history[-10:]
-                    
+
                     if reward_type == 'visible':
                         self.ev_drought_count = 0
                         self.session_visible_rewards += 1
                     elif reward_type == 'ev':
                         self.ev_drought_count += 1
                     else:
-                        # No action — counts toward drought
                         self.ev_drought_count += 1
-                    
-                    # Execute action if present
-                    if action_cmd and action_cmd.lower() != 'none':
-                        # Auto-wrap bare GM.* calls (e.g. "GM.giveItem(68,1)")
-                        # into proper shell format before HOST replacement
-                        import re as _re
-                        if _re.match(r'^GM\.\w+\(', action_cmd.strip()):
-                            action_cmd = f"echo '{action_cmd.strip()}' | nc HOST {self.socket_port}"
-                        # Replace HOST placeholder with actual emulator host
-                        action_cmd = action_cmd.replace(' HOST ', f' {self.socket_host} ')
-                        action_cmd = action_cmd.replace('nc HOST', f'nc {self.socket_host}')
-                        # Add nc timeout flag if missing
-                        if '| nc ' in action_cmd and ' -w ' not in action_cmd:
-                            action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')
-                        # Human-readable action description
-                        readable = self.get_readable_action(action_cmd)
-                        # Tag visible rewards clearly
+
+                    # Execute all extracted GM calls
+                    for gm_call in action_cmds:
+                        shell_cmd = f"echo '{gm_call}' | nc -w 1 {self.socket_host} {self.socket_port}"
+                        readable = self.get_readable_action(gm_call)
                         if reward_type == 'visible':
                             print(f"  {C.BOLD}{C.YELLOW}★ VISIBLE: {readable}{C.RESET}")
                         else:
                             print(f"  {C.BOLD}{C.GREEN}⚡ {readable}{C.RESET}")
                         try:
-                            subprocess.run(action_cmd, shell=True, timeout=5,
+                            subprocess.run(shell_cmd, shell=True, timeout=5,
                                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                            print(f"  {C.GREEN}✓ Complete{C.RESET}")
+                            print(f"  {C.GREEN}✓ {gm_call}{C.RESET}")
                         except subprocess.TimeoutExpired:
                             print(f"  {C.YELLOW}✓ Sent{C.RESET}")
-                        except Exception as e:
-                            print(f"  {C.RED}✗ Failed: {e}{C.RESET}")
-                    else:
-                        print(f"  {C.DIM}No action taken (drought: {self.ev_drought_count}){C.RESET}")
+
+                    if not action_cmds:
+                        # No GM calls found — try legacy shell command fallback
+                        action_cmd_check = (action_cmd or '').lower().strip()
+                        if action_cmd_check and action_cmd_check != 'none':
+                            try:
+                                action_cmd = action_cmd.replace(' HOST ', f' {self.socket_host} ')
+                                action_cmd = action_cmd.replace('nc HOST', f'nc {self.socket_host}')
+                                if '| nc ' in action_cmd and ' -w ' not in action_cmd:
+                                    action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')
+                                readable = self.get_readable_action(action_cmd)
+                                print(f"  {C.BOLD}{C.GREEN}⚡ {readable}{C.RESET}")
+                                subprocess.run(action_cmd, shell=True, timeout=5,
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                                print(f"  {C.GREEN}✓ Complete{C.RESET}")
+                            except subprocess.TimeoutExpired:
+                                print(f"  {C.YELLOW}✓ Sent{C.RESET}")
+                            except Exception as e:
+                                print(f"  {C.RED}✗ Failed: {e}{C.RESET}")
+                        else:
+                            print(f"  {C.DIM}No action taken (drought: {self.ev_drought_count}){C.RESET}")
                     
             except Exception as e:
                 self.log(f"❌ Agent error: {e}")

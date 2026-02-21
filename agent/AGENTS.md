@@ -58,6 +58,14 @@ GM.setShiny(slot)
 
 -- Items (give to bag)
 GM.giveItem(itemId, qty)  -- Rare Candy=68, Sitrus=158, Oran=155, Pecha=133, Antidote=14
+
+-- ⚠️ RULES:
+-- Use GM.addEVs(slot, "stat", amount) — NEVER GM.setEVs (it OVERWRITES, destroying all previous EVs)
+-- You can put MULTIPLE GM calls on the ACTION line, separated by spaces. All will execute:
+--   ACTION: GM.addEVs(4, "atk", 4) GM.giveItem(68, 1)
+-- Strip explanation text from the ACTION line — put comments BEFORE it, not inline:
+--   ❌ ACTION: GM.addEVs(4, "atk", 4) -- because Combusken fought hard
+--   ✅ ACT: GM.addEVs(4, "atk", 4) GM.giveItem(68, 1)
 ```
 
 **Command format** (replace HOST with emulator IP):
