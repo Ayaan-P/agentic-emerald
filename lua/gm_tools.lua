@@ -400,10 +400,31 @@ function GM.modifyPartyPokemon(slot, modifyFn)
     pokemon.decrypted = decrypted
     
     -- Step 4: Call the modifier function (can modify personality!)
+    local oldOrder = personality % 24
     modifyFn(pokemon)
     
-    -- Step 5: If personality changed, recompute key
+    -- Step 5: If personality changed, recompute key AND rearrange substructs
     local newKey = pokemon.personality ~ otId
+    local newOrder = pokemon.personality % 24
+    
+    if oldOrder ~= newOrder then
+        -- Personality % 24 changed → substruct layout changed.
+        -- Physically rearrange decrypted data so each substruct TYPE stays with its data.
+        local oldPositions = SUBSTRUCT_ORDER[oldOrder] or {1,2,3,4}
+        local newPositions = SUBSTRUCT_ORDER[newOrder] or {1,2,3,4}
+        -- Map type → data using old layout
+        local typeToData = {}
+        for i = 1, 4 do
+            typeToData[oldPositions[i]] = decrypted[i-1]
+        end
+        -- Rebuild physical layout for new order
+        local rearranged = {}
+        for i = 1, 4 do
+            rearranged[i-1] = typeToData[newPositions[i]]
+        end
+        decrypted = rearranged
+        console:log("🔀 Rearranged substructs: order " .. oldOrder .. " → " .. newOrder)
+    end
     
     -- Step 6: Re-encrypt all substructs with the (possibly new) key
     for i = 0, 3 do
