@@ -21,11 +21,11 @@ local PARTY_COUNT_ADDR = 0x020244E9
 local POKEMON_SIZE = 100
 
 -- Bag offsets (from saveBlock1)
-local BAG_ITEMS_OFFSET = 0x0560
-local BAG_POKEBALLS_OFFSET = 0x0600
-local BAG_TMS_OFFSET = 0x0640
-local BAG_BERRIES_OFFSET = 0x0740
-local BAG_KEYITEMS_OFFSET = 0x06A0
+local BAG_ITEMS_OFFSET     = 0x0560  -- 30 slots × 4 bytes
+local BAG_KEYITEMS_OFFSET  = 0x05D8  -- 30 slots × 4 bytes (was 0x06A0 — wrong)
+local BAG_POKEBALLS_OFFSET = 0x0650  -- 16 slots × 4 bytes (was 0x0600 — wrong)
+local BAG_TMS_OFFSET       = 0x0690  -- 64 slots × 4 bytes (was 0x0640 — was writing into KeyItems area!)
+local BAG_BERRIES_OFFSET   = 0x0790  -- 46 slots × 4 bytes (was 0x0740 — wrong)
 
 -- Money & badges
 local MONEY_OFFSET = 0x0490
