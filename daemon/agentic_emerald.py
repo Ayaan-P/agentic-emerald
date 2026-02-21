@@ -174,6 +174,11 @@ class PokemonGM:
         self.close_calls = 0
         self.session_start = time.time()
         
+        # Reward visibility tracking (Maren impact system)
+        self.reward_history = []       # Recent reward types: 'visible', 'ev', 'none'
+        self.ev_drought_count = 0      # Consecutive EV-only / no-action rewards
+        self.session_visible_rewards = 0  # Visible rewards this session
+        
         # Battle tracking
         self.battle_history = []
         self.battle_buffer = []
@@ -474,6 +479,61 @@ class PokemonGM:
         else:
             return event_type
     
+    def _classify_reward(self, action_cmd: str) -> str:
+        """
+        Classify a GM action command as 'visible', 'ev', or 'none'.
+        
+        Visible rewards are things the player will actually notice:
+          - teachMove → Pokemon has a new move in the menu
+          - giveItem → item appears in the bag
+          - setShiny → unmissable visual effect
+          - setIVs (high) → shows in battle over time
+          - addExperience (large) → level up visible
+        
+        EV-only rewards are invisible in Gen 3 (no EV display).
+        """
+        if not action_cmd or action_cmd.lower().strip() == 'none':
+            return 'none'
+        # Invisible rewards
+        if any(x in action_cmd for x in ['addEVs', 'setFriendship']):
+            return 'ev'
+        # Everything else is visible or impactful
+        return 'visible'
+    
+    def _get_pending_arcs(self) -> list:
+        """
+        Extract pending arc payoffs from PLAYTHROUGH.md.
+        Looks for lines with explicit pending markers that Maren has promised.
+        Returns up to 5 pending arcs for injection into the agent prompt.
+        """
+        playthrough = self.memory_dir / 'PLAYTHROUGH.md'
+        pending = []
+        markers = [
+            'IMMEDIATE PAYOFF:',
+            'PENDING PAYOFF:',
+            'PENDING:',
+            'STATUS:',
+            'PAYOFF OWED:',
+            '→ immediate shiny',
+            '→ give it',
+            '→ teach',
+        ]
+        try:
+            if playthrough.exists():
+                for line in playthrough.read_text().split('\n'):
+                    stripped = line.strip()
+                    # Skip very short lines and section headers
+                    if len(stripped) < 20:
+                        continue
+                    if any(m.lower() in stripped.lower() for m in markers):
+                        # Clean up markdown formatting
+                        clean = stripped.lstrip('*- ').rstrip('*')
+                        if clean:
+                            pending.append(clean)
+        except Exception:
+            pass
+        return pending[:5]
+    
     def prompt_agent_async(self, event_type: str, context: dict):
         """Send event to AI agent in background thread (with uncertainty check)"""
         # Always invoke for high-uncertainty events, skip routine ones
@@ -547,6 +607,21 @@ class PokemonGM:
                     
                     print(f"  {C.DIM}{'─' * 56}{C.RESET}")
                     
+                    # Classify reward visibility before executing
+                    reward_type = self._classify_reward(action_cmd)
+                    self.reward_history.append(reward_type)
+                    if len(self.reward_history) > 10:
+                        self.reward_history = self.reward_history[-10:]
+                    
+                    if reward_type == 'visible':
+                        self.ev_drought_count = 0
+                        self.session_visible_rewards += 1
+                    elif reward_type == 'ev':
+                        self.ev_drought_count += 1
+                    else:
+                        # No action — counts toward drought
+                        self.ev_drought_count += 1
+                    
                     # Execute action if present
                     if action_cmd and action_cmd.lower() != 'none':
                         # Replace HOST placeholder with actual emulator host
@@ -557,7 +632,11 @@ class PokemonGM:
                             action_cmd = action_cmd.replace('| nc ', '| nc -w 1 ')
                         # Human-readable action description
                         readable = self.get_readable_action(action_cmd)
-                        print(f"  {C.BOLD}{C.GREEN}⚡ {readable}{C.RESET}")
+                        # Tag visible rewards clearly
+                        if reward_type == 'visible':
+                            print(f"  {C.BOLD}{C.YELLOW}★ VISIBLE: {readable}{C.RESET}")
+                        else:
+                            print(f"  {C.BOLD}{C.GREEN}⚡ {readable}{C.RESET}")
                         try:
                             subprocess.run(action_cmd, shell=True, timeout=5,
                                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -567,7 +646,7 @@ class PokemonGM:
                         except Exception as e:
                             print(f"  {C.RED}✗ Failed: {e}{C.RESET}")
                     else:
-                        print(f"  {C.DIM}No action taken{C.RESET}")
+                        print(f"  {C.DIM}No action taken (drought: {self.ev_drought_count}){C.RESET}")
                     
             except Exception as e:
                 self.log(f"❌ Agent error: {e}")
@@ -681,6 +760,7 @@ class PokemonGM:
         prompt += f"Party HP: {int(avg_hp)}% avg\n"
         prompt += f"Session: {session_mins} mins | Badges: {state.get('badge_count', 0)}\n"
         prompt += f"Stats: {self.battles_won} wins, {self.pokemon_caught} caught, {self.close_calls} close calls\n"
+        prompt += f"Rewards: {self.session_visible_rewards} visible this session | drought={self.ev_drought_count}\n"
         
         # Recent battle history for pattern recognition
         if self.battle_history:
@@ -774,6 +854,27 @@ class PokemonGM:
             for entry in self.session_history[-10:]:
                 prompt += f"• [{entry.get('event_type', 'unknown')}] {entry.get('response', '')[:200]}\n"
             prompt += "\nYou've seen these events before. Build on this context, don't repeat yourself.\n"
+        
+        # === MAREN IMPACT SYSTEM ===
+        
+        # Inject pending arc payoffs (things Maren has promised in PLAYTHROUGH.md)
+        pending_arcs = self._get_pending_arcs()
+        if pending_arcs:
+            prompt += f"\n=== PENDING ARC PAYOFFS (you promised these in PLAYTHROUGH.md) ===\n"
+            for arc in pending_arcs:
+                prompt += f"• {arc}\n"
+            prompt += "\nIf this event creates an opportunity to deliver a payoff, DO IT. Don't defer again.\n"
+        
+        # Reward drought warning — escalate to visible if Maren has been invisible too long
+        if self.ev_drought_count >= 3:
+            prompt += f"\n⚠️  IMPACT WARNING: {self.ev_drought_count} consecutive invisible rewards (EVs/none).\n"
+            prompt += f"The player hasn't noticed Maren in {self.ev_drought_count} events.\n"
+            prompt += "If this event scores 4+ on the checklist, use a VISIBLE reward: teachMove, giveItem, or setShiny.\n"
+            prompt += "EVs alone are not enough here. The game needs to feel alive.\n"
+        
+        # Session reward summary (occasional reminder of what's been given)
+        if self.session_visible_rewards == 0 and len(self.reward_history) >= 5:
+            prompt += "\n📊 SESSION NOTE: No visible rewards given yet this session. The player hasn't felt Maren.\n"
         
         return prompt
     
