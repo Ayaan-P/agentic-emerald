@@ -1070,7 +1070,7 @@ class PokemonGM:
         
         elif event_type == 'badge_obtained':
             C = Colors
-            badge_count = data.get('badge_count', '?')
+            badge_count = data.get('badgeCount', data.get('badge_count', '?'))
             print(f"\n  {C.BOLD}{C.YELLOW}{'★' * 40}{C.RESET}")
             print(f"  {C.BOLD}{C.YELLOW}★  BADGE OBTAINED!  ★  Total: {badge_count}  ★{C.RESET}")
             print(f"  {C.BOLD}{C.YELLOW}{'★' * 40}{C.RESET}\n")
