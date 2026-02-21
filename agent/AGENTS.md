@@ -57,7 +57,7 @@ GM.teachMove(slot, moveId, moveSlot)
 GM.setShiny(slot)
 
 -- Items (give to bag)
-GM.giveItem(itemId, qty)  -- Rare Candy=68, Sitrus=158, Oran=155
+GM.giveItem(itemId, qty)  -- Rare Candy=68, Sitrus=158, Oran=155, Pecha=133, Antidote=14
 ```
 
 **Command format** (replace HOST with emulator IP):

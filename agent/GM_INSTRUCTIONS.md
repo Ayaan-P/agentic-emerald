@@ -189,6 +189,11 @@ echo 'GM.setEnemyLevel(1, 25)' | nc HOST 8888
 - 1: Master Ball, 2: Ultra Ball, 3: Great Ball, 4: Poke Ball
 - 17: Potion, 25: Hyper Potion, 23: Full Restore
 - 68: Rare Candy, 28: Revive, 29: Max Revive
+- 14: Antidote, 15: Burn Heal, 16: Ice Heal, 12: Escape Rope
+- **Berries** (use GM.giveItem — these go to items pocket, not berry pouch):
+  - 133: Pecha Berry (cures poison), 135: Rawst Berry (cures burn)
+  - 155: Oran Berry (+10 HP), 158: Sitrus Berry (+HP), 132: Cheri Berry (cures paralysis)
+  - DO NOT use 180 — not a valid item ID
 
 ## Battle Types
 
