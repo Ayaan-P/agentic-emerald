@@ -682,17 +682,29 @@ class PokemonGM:
         # Clear previous response
         if self.response_file.exists():
             self.response_file.unlink()
+
+        # Inject the absolute output path — AGENTS.md says the daemon provides this
+        output_path = str(self.response_file.absolute())
+        full_prompt = prompt + f"\n\nOUTPUT: Write your formatted OBS/PTN/MEM/ACT response to this exact file path using your write tool:\n{output_path}"
         
         result = subprocess.run(
             ["clawdbot", "agent", "--agent", self.agent_id,
-             "--session-id", self.session_id, "--message", prompt],
+             "--session-id", self.session_id, "--message", full_prompt],
             capture_output=True, text=True, timeout=120
         )
         
         if result.returncode != 0:
             self.log(f"⚠️ Clawdbot error: {result.stderr[:120]}")
             return ""
-        
+
+        # Check if clawdbot returned the response directly in stdout
+        if result.stdout and result.stdout.strip():
+            stdout_text = result.stdout.strip()
+            # If it looks like a GM response (has OBS/PTN/ACT or GM. calls), use it directly
+            if any(x in stdout_text for x in ['OBS', 'PTN', 'ACT', 'GM.', 'MEM']):
+                self.response_file.write_text(stdout_text)
+                return stdout_text
+
         # Poll for agent to write response file (up to 90 seconds)
         for _ in range(90):
             time.sleep(1)
