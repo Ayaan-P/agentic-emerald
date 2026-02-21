@@ -305,67 +305,363 @@ function GM.removeItem(itemId, quantity, pocket)
     return false
 end
 
--- Common items shortcuts
-function GM.givePokeballs(quantity) return GM.giveItem(4, quantity, GM.POCKET.POKEBALLS) end    -- Poke Ball
-function GM.giveGreatBalls(quantity) return GM.giveItem(3, quantity, GM.POCKET.POKEBALLS) end   -- Great Ball
-function GM.giveUltraBalls(quantity) return GM.giveItem(2, quantity, GM.POCKET.POKEBALLS) end   -- Ultra Ball
-function GM.giveMasterBall() return GM.giveItem(1, 1, GM.POCKET.POKEBALLS) end                  -- Master Ball
-function GM.giveRareCandy(quantity) return GM.giveItem(68, quantity) end                        -- Rare Candy
-function GM.givePotion(quantity) return GM.giveItem(17, quantity) end                           -- Potion
-function GM.giveSuperPotion(quantity) return GM.giveItem(26, quantity) end                      -- Super Potion
-function GM.giveHyperPotion(quantity) return GM.giveItem(25, quantity) end                      -- Hyper Potion
-function GM.giveMaxPotion(quantity) return GM.giveItem(24, quantity) end                        -- Max Potion
-function GM.giveFullRestore(quantity) return GM.giveItem(23, quantity) end                      -- Full Restore
-function GM.giveRevive(quantity) return GM.giveItem(28, quantity) end                           -- Revive
-function GM.giveMaxRevive(quantity) return GM.giveItem(29, quantity) end                        -- Max Revive
+-- Common items shortcuts (IDs sourced from pokeemerald decomp items.h — authoritative)
+function GM.givePokeballs(quantity)  return GM.giveItem(4,  quantity, GM.POCKET.POKEBALLS) end  -- Poke Ball    id=4
+function GM.giveGreatBalls(quantity) return GM.giveItem(3,  quantity, GM.POCKET.POKEBALLS) end  -- Great Ball   id=3
+function GM.giveUltraBalls(quantity) return GM.giveItem(2,  quantity, GM.POCKET.POKEBALLS) end  -- Ultra Ball   id=2
+function GM.giveMasterBall()         return GM.giveItem(1,  1,        GM.POCKET.POKEBALLS) end  -- Master Ball  id=1
+function GM.giveRareCandy(quantity)  return GM.giveItem(68, quantity, GM.POCKET.ITEMS)     end  -- Rare Candy   id=68
+function GM.givePotion(quantity)     return GM.giveItem(13, quantity, GM.POCKET.ITEMS)     end  -- Potion       id=13
+function GM.giveSuperPotion(quantity)return GM.giveItem(22, quantity, GM.POCKET.ITEMS)     end  -- Super Potion id=22
+function GM.giveHyperPotion(quantity)return GM.giveItem(21, quantity, GM.POCKET.ITEMS)     end  -- Hyper Potion id=21
+function GM.giveMaxPotion(quantity)  return GM.giveItem(20, quantity, GM.POCKET.ITEMS)     end  -- Max Potion   id=20
+function GM.giveFullRestore(quantity)return GM.giveItem(19, quantity, GM.POCKET.ITEMS)     end  -- Full Restore id=19
+function GM.giveRevive(quantity)     return GM.giveItem(24, quantity, GM.POCKET.ITEMS)     end  -- Revive       id=24
+function GM.giveMaxRevive(quantity)  return GM.giveItem(25, quantity, GM.POCKET.ITEMS)     end  -- Max Revive   id=25
 
 -- Berries (go in Berry Pouch — pocket 3)
--- IDs from pokeemerald decomp (BPEE USA)
-function GM.givePechaberry(quantity) return GM.giveItem(135, quantity, GM.POCKET.BERRIES) end   -- Pecha Berry (cures poison)
-function GM.giveSitrusBerry(quantity) return GM.giveItem(142, quantity, GM.POCKET.BERRIES) end  -- Sitrus Berry (restores 1/4 HP)
-function GM.giveOranBerry(quantity) return GM.giveItem(139, quantity, GM.POCKET.BERRIES) end    -- Oran Berry (restores 10 HP)
-function GM.giveLumBerry(quantity) return GM.giveItem(141, quantity, GM.POCKET.BERRIES) end     -- Lum Berry (cures all status)
-function GM.giveLeppaberry(quantity) return GM.giveItem(138, quantity, GM.POCKET.BERRIES) end   -- Leppa Berry (restores PP)
+-- IDs from pokeemerald decomp items.h (BPEE USA — authoritative)
+function GM.givePechaberry(quantity)  return GM.giveItem(135, quantity, GM.POCKET.BERRIES) end  -- Pecha  id=135 cures poison
+function GM.giveSitrusBerry(quantity) return GM.giveItem(142, quantity, GM.POCKET.BERRIES) end  -- Sitrus id=142 restores 1/4 HP
+function GM.giveOranBerry(quantity)   return GM.giveItem(139, quantity, GM.POCKET.BERRIES) end  -- Oran   id=139 restores 10 HP
+function GM.giveLumBerry(quantity)    return GM.giveItem(141, quantity, GM.POCKET.BERRIES) end  -- Lum    id=141 cures all status
+function GM.giveLeppaberry(quantity)  return GM.giveItem(138, quantity, GM.POCKET.BERRIES) end  -- Leppa  id=138 restores PP
 
 -- =============================================================================
 -- ITEM LOOKUP TABLE — GM.give("item name", quantity)
 -- Use this instead of raw IDs. Names are case-insensitive, spaces/hyphens ok.
+-- IDs sourced from pokeemerald decomp: include/constants/items.h
+-- Pockets: ITEMS=0, POKEBALLS=1, TMS=2, BERRIES=3, KEYITEMS=4
 -- =============================================================================
 
 local ITEM_LOOKUP = {
-    -- Pokeballs
-    ["pokeball"]     = {id=4,   pocket=1}, ["poke ball"]   = {id=4,   pocket=1},
-    ["greatball"]    = {id=3,   pocket=1}, ["great ball"]  = {id=3,   pocket=1},
-    ["ultraball"]    = {id=2,   pocket=1}, ["ultra ball"]  = {id=2,   pocket=1},
-    ["masterball"]   = {id=1,   pocket=1}, ["master ball"] = {id=1,   pocket=1},
-    -- Healing items
-    ["potion"]       = {id=17,  pocket=0},
-    ["superpotion"]  = {id=26,  pocket=0}, ["super potion"]  = {id=26,  pocket=0},
-    ["hyperpotion"]  = {id=25,  pocket=0}, ["hyper potion"]  = {id=25,  pocket=0},
-    ["maxpotion"]    = {id=24,  pocket=0}, ["max potion"]    = {id=24,  pocket=0},
-    ["fullrestore"]  = {id=23,  pocket=0}, ["full restore"]  = {id=23,  pocket=0},
-    ["revive"]       = {id=28,  pocket=0},
-    ["maxrevive"]    = {id=29,  pocket=0}, ["max revive"]    = {id=29,  pocket=0},
-    ["antidote"]     = {id=14,  pocket=0},
-    ["fullheal"]     = {id=27,  pocket=0}, ["full heal"]     = {id=27,  pocket=0},
-    -- Battle items
-    ["rarecandy"]    = {id=68,  pocket=0}, ["rare candy"]    = {id=68,  pocket=0},
-    ["xattack"]      = {id=78,  pocket=0}, ["x attack"]      = {id=78,  pocket=0},
-    ["xdefend"]      = {id=79,  pocket=0}, ["x defend"]      = {id=79,  pocket=0},
-    ["xspeed"]       = {id=80,  pocket=0}, ["x speed"]       = {id=80,  pocket=0},
-    ["xspecial"]     = {id=81,  pocket=0}, ["x special"]     = {id=81,  pocket=0},
-    ["xaccuracy"]    = {id=83,  pocket=0}, ["x accuracy"]    = {id=83,  pocket=0},
-    ["guardspec"]    = {id=85,  pocket=0}, ["guard spec"]    = {id=85,  pocket=0},
-    ["direhit"]      = {id=84,  pocket=0}, ["dire hit"]      = {id=84,  pocket=0},
-    -- Berries (pocket 3!)
-    ["cheriberrry"]  = {id=133, pocket=3}, ["cheri berry"]   = {id=133, pocket=3},
-    ["pechaberry"]   = {id=135, pocket=3}, ["pecha berry"]   = {id=135, pocket=3},
-    ["rawstberry"]   = {id=136, pocket=3}, ["rawst berry"]   = {id=136, pocket=3},
-    ["leppaberry"]   = {id=138, pocket=3}, ["leppa berry"]   = {id=138, pocket=3},
-    ["oranberry"]    = {id=139, pocket=3}, ["oran berry"]    = {id=139, pocket=3},
-    ["lumberry"]     = {id=141, pocket=3}, ["lum berry"]     = {id=141, pocket=3},
-    ["sitrusberry"]  = {id=142, pocket=3}, ["sitrus berry"]  = {id=142, pocket=3},
-    ["aspearberry"]  = {id=137, pocket=3}, ["aspear berry"]  = {id=137, pocket=3},
+
+    -- =========================================================================
+    -- POKEBALLS (pocket 1 = POCKET_POKE_BALLS)
+    -- =========================================================================
+    ["master ball"]   = {id=1,  pocket=1}, ["masterball"]   = {id=1,  pocket=1},
+    ["ultra ball"]    = {id=2,  pocket=1}, ["ultraball"]    = {id=2,  pocket=1},
+    ["great ball"]    = {id=3,  pocket=1}, ["greatball"]    = {id=3,  pocket=1},
+    ["poke ball"]     = {id=4,  pocket=1}, ["pokeball"]     = {id=4,  pocket=1}, ["pokéball"] = {id=4, pocket=1},
+    ["safari ball"]   = {id=5,  pocket=1}, ["safariball"]   = {id=5,  pocket=1},
+    ["net ball"]      = {id=6,  pocket=1}, ["netball"]      = {id=6,  pocket=1},
+    ["dive ball"]     = {id=7,  pocket=1}, ["diveball"]     = {id=7,  pocket=1},
+    ["nest ball"]     = {id=8,  pocket=1}, ["nestball"]     = {id=8,  pocket=1},
+    ["repeat ball"]   = {id=9,  pocket=1}, ["repeatball"]   = {id=9,  pocket=1},
+    ["timer ball"]    = {id=10, pocket=1}, ["timerball"]    = {id=10, pocket=1},
+    ["luxury ball"]   = {id=11, pocket=1}, ["luxuryball"]   = {id=11, pocket=1},
+    ["premier ball"]  = {id=12, pocket=1}, ["premierball"]  = {id=12, pocket=1},
+
+    -- =========================================================================
+    -- MEDICINE / HEALING (pocket 0 = POCKET_ITEMS)
+    -- =========================================================================
+    ["potion"]         = {id=13, pocket=0},
+    ["antidote"]       = {id=14, pocket=0},
+    ["burn heal"]      = {id=15, pocket=0}, ["burnheal"]      = {id=15, pocket=0},
+    ["ice heal"]       = {id=16, pocket=0}, ["iceheal"]       = {id=16, pocket=0},
+    ["awakening"]      = {id=17, pocket=0},
+    ["parlyz heal"]    = {id=18, pocket=0}, ["paralyze heal"] = {id=18, pocket=0},
+                                            ["paralyzeheal"]  = {id=18, pocket=0}, ["parlyzheal"] = {id=18, pocket=0},
+    ["full restore"]   = {id=19, pocket=0}, ["fullrestore"]   = {id=19, pocket=0},
+    ["max potion"]     = {id=20, pocket=0}, ["maxpotion"]     = {id=20, pocket=0},
+    ["hyper potion"]   = {id=21, pocket=0}, ["hyperpotion"]   = {id=21, pocket=0},
+    ["super potion"]   = {id=22, pocket=0}, ["superpotion"]   = {id=22, pocket=0},
+    ["full heal"]      = {id=23, pocket=0}, ["fullheal"]      = {id=23, pocket=0},
+    ["revive"]         = {id=24, pocket=0},
+    ["max revive"]     = {id=25, pocket=0}, ["maxrevive"]     = {id=25, pocket=0},
+    ["fresh water"]    = {id=26, pocket=0}, ["freshwater"]    = {id=26, pocket=0},
+    ["soda pop"]       = {id=27, pocket=0}, ["sodapop"]       = {id=27, pocket=0},
+    ["lemonade"]       = {id=28, pocket=0},
+    ["moomoo milk"]    = {id=29, pocket=0}, ["moomoomilk"]    = {id=29, pocket=0}, ["moo moo milk"] = {id=29, pocket=0},
+    ["energy powder"]  = {id=30, pocket=0}, ["energypowder"]  = {id=30, pocket=0},
+    ["energy root"]    = {id=31, pocket=0}, ["energyroot"]    = {id=31, pocket=0},
+    ["heal powder"]    = {id=32, pocket=0}, ["healpowder"]    = {id=32, pocket=0},
+    ["revival herb"]   = {id=33, pocket=0}, ["revivalherb"]   = {id=33, pocket=0},
+    ["ether"]          = {id=34, pocket=0},
+    ["max ether"]      = {id=35, pocket=0}, ["maxether"]      = {id=35, pocket=0},
+    ["elixir"]         = {id=36, pocket=0},
+    ["max elixir"]     = {id=37, pocket=0}, ["maxelixir"]     = {id=37, pocket=0},
+    ["lava cookie"]    = {id=38, pocket=0}, ["lavacookie"]    = {id=38, pocket=0},
+    ["berry juice"]    = {id=44, pocket=0}, ["berryjuice"]    = {id=44, pocket=0},
+    ["sacred ash"]     = {id=45, pocket=0}, ["sacredash"]     = {id=45, pocket=0},
+
+    -- =========================================================================
+    -- VITAMINS & RARE CANDY (pocket 0)
+    -- =========================================================================
+    ["hp up"]          = {id=63, pocket=0}, ["hpup"]          = {id=63, pocket=0},
+    ["protein"]        = {id=64, pocket=0},
+    ["iron"]           = {id=65, pocket=0},
+    ["carbos"]         = {id=66, pocket=0},
+    ["calcium"]        = {id=67, pocket=0},
+    ["rare candy"]     = {id=68, pocket=0}, ["rarecandy"]     = {id=68, pocket=0},
+    ["pp up"]          = {id=69, pocket=0}, ["ppup"]          = {id=69, pocket=0},
+    ["zinc"]           = {id=70, pocket=0},
+    ["pp max"]         = {id=71, pocket=0}, ["ppmax"]         = {id=71, pocket=0},
+
+    -- =========================================================================
+    -- BATTLE ITEMS (pocket 0)
+    -- =========================================================================
+    ["guard spec"]     = {id=73, pocket=0}, ["guardspec"]     = {id=73, pocket=0}, ["guard spec."] = {id=73, pocket=0},
+    ["dire hit"]       = {id=74, pocket=0}, ["direhit"]       = {id=74, pocket=0},
+    ["x attack"]       = {id=75, pocket=0}, ["xattack"]       = {id=75, pocket=0},
+    ["x defend"]       = {id=76, pocket=0}, ["xdefend"]       = {id=76, pocket=0},
+    ["x speed"]        = {id=77, pocket=0}, ["xspeed"]        = {id=77, pocket=0},
+    ["x accuracy"]     = {id=78, pocket=0}, ["xaccuracy"]     = {id=78, pocket=0},
+    ["x special"]      = {id=79, pocket=0}, ["xspecial"]      = {id=79, pocket=0},
+    ["poke doll"]      = {id=80, pocket=0}, ["pokedoll"]      = {id=80, pocket=0},
+    ["fluffy tail"]    = {id=81, pocket=0}, ["fluffytail"]    = {id=81, pocket=0},
+    ["super repel"]    = {id=83, pocket=0}, ["superrepel"]    = {id=83, pocket=0},
+    ["max repel"]      = {id=84, pocket=0}, ["maxrepel"]      = {id=84, pocket=0},
+    ["escape rope"]    = {id=85, pocket=0}, ["escaperope"]    = {id=85, pocket=0},
+    ["repel"]          = {id=86, pocket=0},
+
+    -- =========================================================================
+    -- EVOLUTION STONES (pocket 0)
+    -- =========================================================================
+    ["sun stone"]      = {id=93,  pocket=0}, ["sunstone"]      = {id=93,  pocket=0},
+    ["moon stone"]     = {id=94,  pocket=0}, ["moonstone"]     = {id=94,  pocket=0},
+    ["fire stone"]     = {id=95,  pocket=0}, ["firestone"]     = {id=95,  pocket=0},
+    ["thunder stone"]  = {id=96,  pocket=0}, ["thunderstone"]  = {id=96,  pocket=0},
+    ["water stone"]    = {id=97,  pocket=0}, ["waterstone"]    = {id=97,  pocket=0},
+    ["leaf stone"]     = {id=98,  pocket=0}, ["leafstone"]     = {id=98,  pocket=0},
+
+    -- =========================================================================
+    -- SELLABLE ITEMS / MISC (pocket 0)
+    -- =========================================================================
+    ["tiny mushroom"]  = {id=103, pocket=0}, ["tinymushroom"]  = {id=103, pocket=0},
+    ["big mushroom"]   = {id=104, pocket=0}, ["bigmushroom"]   = {id=104, pocket=0},
+    ["pearl"]          = {id=106, pocket=0},
+    ["big pearl"]      = {id=107, pocket=0}, ["bigpearl"]      = {id=107, pocket=0},
+    ["stardust"]       = {id=108, pocket=0},
+    ["star piece"]     = {id=109, pocket=0}, ["starpiece"]     = {id=109, pocket=0},
+    ["nugget"]         = {id=110, pocket=0},
+    ["heart scale"]    = {id=111, pocket=0}, ["heartscale"]    = {id=111, pocket=0},
+    ["shoal salt"]     = {id=46,  pocket=0}, ["shoalsalt"]     = {id=46,  pocket=0},
+    ["shoal shell"]    = {id=47,  pocket=0}, ["shoalshell"]    = {id=47,  pocket=0},
+    ["red shard"]      = {id=48,  pocket=0}, ["redshard"]      = {id=48,  pocket=0},
+    ["blue shard"]     = {id=49,  pocket=0}, ["blueshard"]     = {id=49,  pocket=0},
+    ["yellow shard"]   = {id=50,  pocket=0}, ["yellowshard"]   = {id=50,  pocket=0},
+    ["green shard"]    = {id=51,  pocket=0}, ["greenshard"]    = {id=51,  pocket=0},
+    ["blue flute"]     = {id=39,  pocket=0}, ["blueflute"]     = {id=39,  pocket=0},
+    ["yellow flute"]   = {id=40,  pocket=0}, ["yellowflute"]   = {id=40,  pocket=0},
+    ["red flute"]      = {id=41,  pocket=0}, ["redflute"]      = {id=41,  pocket=0},
+    ["black flute"]    = {id=42,  pocket=0}, ["blackflute"]    = {id=42,  pocket=0},
+    ["white flute"]    = {id=43,  pocket=0}, ["whiteflute"]    = {id=43,  pocket=0},
+
+    -- =========================================================================
+    -- HELD ITEMS (pocket 0)
+    -- =========================================================================
+    ["bright powder"]  = {id=179, pocket=0}, ["brightpowder"]  = {id=179, pocket=0},
+    ["white herb"]     = {id=180, pocket=0}, ["whiteherb"]     = {id=180, pocket=0},
+    ["macho brace"]    = {id=181, pocket=0}, ["machobrace"]    = {id=181, pocket=0},
+    ["exp share"]      = {id=182, pocket=0}, ["expshare"]      = {id=182, pocket=0}, ["exp. share"] = {id=182, pocket=0},
+    ["quick claw"]     = {id=183, pocket=0}, ["quickclaw"]     = {id=183, pocket=0},
+    ["soothe bell"]    = {id=184, pocket=0}, ["soothebell"]    = {id=184, pocket=0},
+    ["mental herb"]    = {id=185, pocket=0}, ["mentalherb"]    = {id=185, pocket=0},
+    ["choice band"]    = {id=186, pocket=0}, ["choiceband"]    = {id=186, pocket=0},
+    ["king's rock"]    = {id=187, pocket=0}, ["kings rock"]    = {id=187, pocket=0}, ["kingsrock"] = {id=187, pocket=0},
+    ["silver powder"]  = {id=188, pocket=0}, ["silverpowder"]  = {id=188, pocket=0},
+    ["amulet coin"]    = {id=189, pocket=0}, ["amuletcoin"]    = {id=189, pocket=0},
+    ["cleanse tag"]    = {id=190, pocket=0}, ["cleansetag"]    = {id=190, pocket=0},
+    ["soul dew"]       = {id=191, pocket=0}, ["souldew"]       = {id=191, pocket=0},
+    ["deep sea tooth"] = {id=192, pocket=0}, ["deepseatooth"]  = {id=192, pocket=0},
+    ["deep sea scale"] = {id=193, pocket=0}, ["deepseascale"]  = {id=193, pocket=0},
+    ["smoke ball"]     = {id=194, pocket=0}, ["smokeball"]     = {id=194, pocket=0},
+    ["everstone"]      = {id=195, pocket=0},
+    ["focus band"]     = {id=196, pocket=0}, ["focusband"]     = {id=196, pocket=0},
+    ["lucky egg"]      = {id=197, pocket=0}, ["luckyegg"]      = {id=197, pocket=0},
+    ["scope lens"]     = {id=198, pocket=0}, ["scopelens"]     = {id=198, pocket=0},
+    ["metal coat"]     = {id=199, pocket=0}, ["metalcoat"]     = {id=199, pocket=0},
+    ["leftovers"]      = {id=200, pocket=0},
+    ["dragon scale"]   = {id=201, pocket=0}, ["dragonscale"]   = {id=201, pocket=0},
+    ["light ball"]     = {id=202, pocket=0}, ["lightball"]     = {id=202, pocket=0},
+    ["soft sand"]      = {id=203, pocket=0}, ["softsand"]      = {id=203, pocket=0},
+    ["hard stone"]     = {id=204, pocket=0}, ["hardstone"]     = {id=204, pocket=0},
+    ["miracle seed"]   = {id=205, pocket=0}, ["miracleseed"]   = {id=205, pocket=0},
+    ["black glasses"]  = {id=206, pocket=0}, ["blackglasses"]  = {id=206, pocket=0},
+    ["black belt"]     = {id=207, pocket=0}, ["blackbelt"]     = {id=207, pocket=0},
+    ["magnet"]         = {id=208, pocket=0},
+    ["mystic water"]   = {id=209, pocket=0}, ["mysticwater"]   = {id=209, pocket=0},
+    ["sharp beak"]     = {id=210, pocket=0}, ["sharpbeak"]     = {id=210, pocket=0},
+    ["poison barb"]    = {id=211, pocket=0}, ["poisonbarb"]    = {id=211, pocket=0},
+    ["never melt ice"] = {id=212, pocket=0}, ["nevermeltice"]  = {id=212, pocket=0},
+    ["spell tag"]      = {id=213, pocket=0}, ["spelltag"]      = {id=213, pocket=0},
+    ["twisted spoon"]  = {id=214, pocket=0}, ["twistedspoon"]  = {id=214, pocket=0},
+    ["charcoal"]       = {id=215, pocket=0},
+    ["dragon fang"]    = {id=216, pocket=0}, ["dragonfang"]    = {id=216, pocket=0},
+    ["silk scarf"]     = {id=217, pocket=0}, ["silkscarf"]     = {id=217, pocket=0},
+    ["up grade"]       = {id=218, pocket=0}, ["upgrade"]       = {id=218, pocket=0},
+    ["shell bell"]     = {id=219, pocket=0}, ["shellbell"]     = {id=219, pocket=0},
+    ["sea incense"]    = {id=220, pocket=0}, ["seaincense"]    = {id=220, pocket=0},
+    ["lax incense"]    = {id=221, pocket=0}, ["laxincense"]    = {id=221, pocket=0},
+    ["lucky punch"]    = {id=222, pocket=0}, ["luckypunch"]    = {id=222, pocket=0},
+    ["metal powder"]   = {id=223, pocket=0}, ["metalpowder"]   = {id=223, pocket=0},
+    ["thick club"]     = {id=224, pocket=0}, ["thickclub"]     = {id=224, pocket=0},
+    ["stick"]          = {id=225, pocket=0},
+
+    -- =========================================================================
+    -- CONTEST SCARVES (pocket 0)
+    -- =========================================================================
+    ["red scarf"]      = {id=254, pocket=0}, ["redscarf"]      = {id=254, pocket=0},
+    ["blue scarf"]     = {id=255, pocket=0}, ["bluescarf"]     = {id=255, pocket=0},
+    ["pink scarf"]     = {id=256, pocket=0}, ["pinkscarf"]     = {id=256, pocket=0},
+    ["green scarf"]    = {id=257, pocket=0}, ["greenscarf"]    = {id=257, pocket=0},
+    ["yellow scarf"]   = {id=258, pocket=0}, ["yellowscarf"]   = {id=258, pocket=0},
+
+    -- =========================================================================
+    -- KEY ITEMS (pocket 4 = POCKET_KEY_ITEMS)
+    -- =========================================================================
+    ["mach bike"]      = {id=259, pocket=4}, ["machbike"]      = {id=259, pocket=4},
+    ["coin case"]      = {id=260, pocket=4}, ["coincase"]      = {id=260, pocket=4},
+    ["itemfinder"]     = {id=261, pocket=4},
+    ["old rod"]        = {id=262, pocket=4}, ["oldrod"]        = {id=262, pocket=4},
+    ["good rod"]       = {id=263, pocket=4}, ["goodrod"]       = {id=263, pocket=4},
+    ["super rod"]      = {id=264, pocket=4}, ["superrod"]      = {id=264, pocket=4},
+    ["ss ticket"]      = {id=265, pocket=4}, ["ssticket"]      = {id=265, pocket=4},
+    ["contest pass"]   = {id=266, pocket=4}, ["contestpass"]   = {id=266, pocket=4},
+    ["wailmer pail"]   = {id=268, pocket=4}, ["wailmerpail"]   = {id=268, pocket=4},
+    ["devon goods"]    = {id=269, pocket=4}, ["devongoods"]    = {id=269, pocket=4},
+    ["soot sack"]      = {id=270, pocket=4}, ["sootsack"]      = {id=270, pocket=4},
+    ["basement key"]   = {id=271, pocket=4}, ["basementkey"]   = {id=271, pocket=4},
+    ["acro bike"]      = {id=272, pocket=4}, ["acrobike"]      = {id=272, pocket=4},
+    ["pokeblock case"] = {id=273, pocket=4}, ["pokeblockcase"] = {id=273, pocket=4},
+    ["letter"]         = {id=274, pocket=4},
+    ["eon ticket"]     = {id=275, pocket=4}, ["eonticket"]     = {id=275, pocket=4},
+    ["red orb"]        = {id=276, pocket=4}, ["redorb"]        = {id=276, pocket=4},
+    ["blue orb"]       = {id=277, pocket=4}, ["blueorb"]       = {id=277, pocket=4},
+    ["scanner"]        = {id=278, pocket=4},
+    ["go goggles"]     = {id=279, pocket=4}, ["gogoggles"]     = {id=279, pocket=4},
+    ["meteorite"]      = {id=280, pocket=4},
+    ["root fossil"]    = {id=286, pocket=4}, ["rootfossil"]    = {id=286, pocket=4},
+    ["claw fossil"]    = {id=287, pocket=4}, ["clawfossil"]    = {id=287, pocket=4},
+    ["devon scope"]    = {id=288, pocket=4}, ["devonscope"]    = {id=288, pocket=4},
+    ["magma emblem"]   = {id=375, pocket=4}, ["magmaemblem"]   = {id=375, pocket=4},
+    ["old sea map"]    = {id=376, pocket=4}, ["oldseamap"]     = {id=376, pocket=4},
+
+    -- =========================================================================
+    -- TMs (pocket 2 = POCKET_TMS_HMS) — Emerald TM list
+    -- TM01=Focus Punch TM02=Dragon Claw TM03=Water Pulse TM04=Calm Mind
+    -- TM05=Roar TM06=Toxic TM07=Hail TM08=Bulk Up TM09=Bullet Seed TM10=Hidden Power
+    -- TM11=Sunny Day TM12=Taunt TM13=Ice Beam TM14=Blizzard TM15=Hyper Beam
+    -- TM16=Light Screen TM17=Protect TM18=Rain Dance TM19=Giga Drain TM20=Safeguard
+    -- TM21=Frustration TM22=SolarBeam TM23=Iron Tail TM24=Thunderbolt TM25=Thunder
+    -- TM26=Earthquake TM27=Return TM28=Dig TM29=Psychic TM30=Shadow Ball
+    -- TM31=Brick Break TM32=Double Team TM33=Reflect TM34=Shock Wave TM35=Flamethrower
+    -- TM36=Sludge Bomb TM37=Sandstorm TM38=Fire Blast TM39=Rock Tomb TM40=Aerial Ace
+    -- TM41=Torment TM42=Facade TM43=Secret Power TM44=Rest TM45=Attract
+    -- TM46=Thief TM47=Steel Wing TM48=Skill Swap TM49=Snatch TM50=Overheat
+    -- HM01=Cut HM02=Fly HM03=Surf HM04=Strength HM05=Flash HM06=Rock Smash HM07=Waterfall HM08=Dive
+    -- =========================================================================
+    ["tm01"]  = {id=289, pocket=2}, ["tm1"]   = {id=289, pocket=2}, ["focus punch"]  = {id=289, pocket=2},
+    ["tm02"]  = {id=290, pocket=2}, ["tm2"]   = {id=290, pocket=2}, ["dragon claw"]  = {id=290, pocket=2}, ["dragonclaw"] = {id=290, pocket=2},
+    ["tm03"]  = {id=291, pocket=2}, ["tm3"]   = {id=291, pocket=2}, ["water pulse"]  = {id=291, pocket=2}, ["waterpulse"] = {id=291, pocket=2},
+    ["tm04"]  = {id=292, pocket=2}, ["tm4"]   = {id=292, pocket=2}, ["calm mind"]    = {id=292, pocket=2}, ["calmmind"]   = {id=292, pocket=2},
+    ["tm05"]  = {id=293, pocket=2}, ["tm5"]   = {id=293, pocket=2}, ["roar"]         = {id=293, pocket=2},
+    ["tm06"]  = {id=294, pocket=2}, ["tm6"]   = {id=294, pocket=2}, ["toxic"]        = {id=294, pocket=2},
+    ["tm07"]  = {id=295, pocket=2}, ["tm7"]   = {id=295, pocket=2}, ["hail"]         = {id=295, pocket=2},
+    ["tm08"]  = {id=296, pocket=2}, ["tm8"]   = {id=296, pocket=2}, ["bulk up"]      = {id=296, pocket=2}, ["bulkup"]     = {id=296, pocket=2},
+    ["tm09"]  = {id=297, pocket=2}, ["tm9"]   = {id=297, pocket=2}, ["bullet seed"]  = {id=297, pocket=2}, ["bulletseed"] = {id=297, pocket=2},
+    ["tm10"]  = {id=298, pocket=2}, ["hidden power"] = {id=298, pocket=2}, ["hiddenpower"] = {id=298, pocket=2},
+    ["tm11"]  = {id=299, pocket=2}, ["sunny day"]    = {id=299, pocket=2}, ["sunnyday"]    = {id=299, pocket=2},
+    ["tm12"]  = {id=300, pocket=2}, ["taunt"]        = {id=300, pocket=2},
+    ["tm13"]  = {id=301, pocket=2}, ["ice beam"]     = {id=301, pocket=2}, ["icebeam"]     = {id=301, pocket=2},
+    ["tm14"]  = {id=302, pocket=2}, ["blizzard"]     = {id=302, pocket=2},
+    ["tm15"]  = {id=303, pocket=2}, ["hyper beam"]   = {id=303, pocket=2}, ["hyperbeam"]   = {id=303, pocket=2},
+    ["tm16"]  = {id=304, pocket=2}, ["light screen"] = {id=304, pocket=2}, ["lightscreen"] = {id=304, pocket=2},
+    ["tm17"]  = {id=305, pocket=2}, ["protect"]      = {id=305, pocket=2},
+    ["tm18"]  = {id=306, pocket=2}, ["rain dance"]   = {id=306, pocket=2}, ["raindance"]   = {id=306, pocket=2},
+    ["tm19"]  = {id=307, pocket=2}, ["giga drain"]   = {id=307, pocket=2}, ["gigadrain"]   = {id=307, pocket=2},
+    ["tm20"]  = {id=308, pocket=2}, ["safeguard"]    = {id=308, pocket=2},
+    ["tm21"]  = {id=309, pocket=2}, ["frustration"]  = {id=309, pocket=2},
+    ["tm22"]  = {id=310, pocket=2}, ["solarbeam"]    = {id=310, pocket=2}, ["solar beam"]  = {id=310, pocket=2},
+    ["tm23"]  = {id=311, pocket=2}, ["iron tail"]    = {id=311, pocket=2}, ["irontail"]    = {id=311, pocket=2},
+    ["tm24"]  = {id=312, pocket=2}, ["thunderbolt"]  = {id=312, pocket=2},
+    ["tm25"]  = {id=313, pocket=2}, ["thunder"]      = {id=313, pocket=2},
+    ["tm26"]  = {id=314, pocket=2}, ["earthquake"]   = {id=314, pocket=2},
+    ["tm27"]  = {id=315, pocket=2}, ["return"]       = {id=315, pocket=2},
+    ["tm28"]  = {id=316, pocket=2}, ["dig"]          = {id=316, pocket=2},
+    ["tm29"]  = {id=317, pocket=2}, ["psychic"]      = {id=317, pocket=2},
+    ["tm30"]  = {id=318, pocket=2}, ["shadow ball"]  = {id=318, pocket=2}, ["shadowball"]  = {id=318, pocket=2},
+    ["tm31"]  = {id=319, pocket=2}, ["brick break"]  = {id=319, pocket=2}, ["brickbreak"]  = {id=319, pocket=2},
+    ["tm32"]  = {id=320, pocket=2}, ["double team"]  = {id=320, pocket=2}, ["doubleteam"]  = {id=320, pocket=2},
+    ["tm33"]  = {id=321, pocket=2}, ["reflect"]      = {id=321, pocket=2},
+    ["tm34"]  = {id=322, pocket=2}, ["shock wave"]   = {id=322, pocket=2}, ["shockwave"]   = {id=322, pocket=2},
+    ["tm35"]  = {id=323, pocket=2}, ["flamethrower"] = {id=323, pocket=2},
+    ["tm36"]  = {id=324, pocket=2}, ["sludge bomb"]  = {id=324, pocket=2}, ["sludgebomb"]  = {id=324, pocket=2},
+    ["tm37"]  = {id=325, pocket=2}, ["sandstorm"]    = {id=325, pocket=2},
+    ["tm38"]  = {id=326, pocket=2}, ["fire blast"]   = {id=326, pocket=2}, ["fireblast"]   = {id=326, pocket=2},
+    ["tm39"]  = {id=327, pocket=2}, ["rock tomb"]    = {id=327, pocket=2}, ["rocktomb"]    = {id=327, pocket=2},
+    ["tm40"]  = {id=328, pocket=2}, ["aerial ace"]   = {id=328, pocket=2}, ["aerialace"]   = {id=328, pocket=2},
+    ["tm41"]  = {id=329, pocket=2}, ["torment"]      = {id=329, pocket=2},
+    ["tm42"]  = {id=330, pocket=2}, ["facade"]       = {id=330, pocket=2},
+    ["tm43"]  = {id=331, pocket=2}, ["secret power"] = {id=331, pocket=2}, ["secretpower"] = {id=331, pocket=2},
+    ["tm44"]  = {id=332, pocket=2}, ["rest"]         = {id=332, pocket=2},
+    ["tm45"]  = {id=333, pocket=2}, ["attract"]      = {id=333, pocket=2},
+    ["tm46"]  = {id=334, pocket=2}, ["thief"]        = {id=334, pocket=2},
+    ["tm47"]  = {id=335, pocket=2}, ["steel wing"]   = {id=335, pocket=2}, ["steelwing"]   = {id=335, pocket=2},
+    ["tm48"]  = {id=336, pocket=2}, ["skill swap"]   = {id=336, pocket=2}, ["skillswap"]   = {id=336, pocket=2},
+    ["tm49"]  = {id=337, pocket=2}, ["snatch"]       = {id=337, pocket=2},
+    ["tm50"]  = {id=338, pocket=2}, ["overheat"]     = {id=338, pocket=2},
+    -- HMs
+    ["hm01"]  = {id=339, pocket=2}, ["hm1"]  = {id=339, pocket=2}, ["cut"]        = {id=339, pocket=2},
+    ["hm02"]  = {id=340, pocket=2}, ["hm2"]  = {id=340, pocket=2}, ["fly"]        = {id=340, pocket=2},
+    ["hm03"]  = {id=341, pocket=2}, ["hm3"]  = {id=341, pocket=2}, ["surf"]       = {id=341, pocket=2},
+    ["hm04"]  = {id=342, pocket=2}, ["hm4"]  = {id=342, pocket=2}, ["strength"]   = {id=342, pocket=2},
+    ["hm05"]  = {id=343, pocket=2}, ["hm5"]  = {id=343, pocket=2}, ["flash"]      = {id=343, pocket=2},
+    ["hm06"]  = {id=344, pocket=2}, ["hm6"]  = {id=344, pocket=2}, ["rock smash"] = {id=344, pocket=2}, ["rocksmash"] = {id=344, pocket=2},
+    ["hm07"]  = {id=345, pocket=2}, ["hm7"]  = {id=345, pocket=2}, ["waterfall"]  = {id=345, pocket=2},
+    ["hm08"]  = {id=346, pocket=2}, ["hm8"]  = {id=346, pocket=2}, ["dive"]       = {id=346, pocket=2},
+
+    -- =========================================================================
+    -- BERRIES (pocket 3 = POCKET_BERRIES) — full Gen III list (IDs 133-175)
+    -- Status cures: Cheri(par) Chesto(slp) Pecha(psn) Rawst(brn) Aspear(frz)
+    -- PP/HP: Leppa(PP) Oran(10HP) Sitrus(1/4HP) Lum(all status)
+    -- EV reducers: Pomeg(HP) Kelpsy(Atk) Qualot(Def) Hondew(SpA) Grepa(SpD) Tamato(Spe)
+    -- Pinch berries (raise stat at low HP): Liechi(Atk) Ganlon(Def) Salac(Spe) Petaya(SpA) Apicot(SpD)
+    -- =========================================================================
+    ["cheri berry"]    = {id=133, pocket=3}, ["cheriberry"]    = {id=133, pocket=3},
+    ["chesto berry"]   = {id=134, pocket=3}, ["chestoberry"]   = {id=134, pocket=3},
+    ["pecha berry"]    = {id=135, pocket=3}, ["pechaberry"]    = {id=135, pocket=3},
+    ["rawst berry"]    = {id=136, pocket=3}, ["rawstberry"]    = {id=136, pocket=3},
+    ["aspear berry"]   = {id=137, pocket=3}, ["aspearberry"]   = {id=137, pocket=3},
+    ["leppa berry"]    = {id=138, pocket=3}, ["leppaberry"]    = {id=138, pocket=3},
+    ["oran berry"]     = {id=139, pocket=3}, ["oranberry"]     = {id=139, pocket=3},
+    ["persim berry"]   = {id=140, pocket=3}, ["persimberry"]   = {id=140, pocket=3},
+    ["lum berry"]      = {id=141, pocket=3}, ["lumberry"]      = {id=141, pocket=3},
+    ["sitrus berry"]   = {id=142, pocket=3}, ["sitrusberry"]   = {id=142, pocket=3},
+    ["figy berry"]     = {id=143, pocket=3}, ["figyberry"]     = {id=143, pocket=3},
+    ["wiki berry"]     = {id=144, pocket=3}, ["wikiberry"]     = {id=144, pocket=3},
+    ["mago berry"]     = {id=145, pocket=3}, ["magoberry"]     = {id=145, pocket=3},
+    ["aguav berry"]    = {id=146, pocket=3}, ["aguavberry"]    = {id=146, pocket=3},
+    ["iapapa berry"]   = {id=147, pocket=3}, ["iapapaberry"]   = {id=147, pocket=3},
+    ["razz berry"]     = {id=148, pocket=3}, ["razzberry"]     = {id=148, pocket=3},
+    ["bluk berry"]     = {id=149, pocket=3}, ["blukberry"]     = {id=149, pocket=3},
+    ["nanab berry"]    = {id=150, pocket=3}, ["nanabberry"]    = {id=150, pocket=3},
+    ["wepear berry"]   = {id=151, pocket=3}, ["wepearberry"]   = {id=151, pocket=3},
+    ["pinap berry"]    = {id=152, pocket=3}, ["pinapberry"]    = {id=152, pocket=3},
+    ["pomeg berry"]    = {id=153, pocket=3}, ["pomegberry"]    = {id=153, pocket=3},
+    ["kelpsy berry"]   = {id=154, pocket=3}, ["kelpsyberry"]   = {id=154, pocket=3},
+    ["qualot berry"]   = {id=155, pocket=3}, ["qualotberry"]   = {id=155, pocket=3},
+    ["hondew berry"]   = {id=156, pocket=3}, ["hondewberry"]   = {id=156, pocket=3},
+    ["grepa berry"]    = {id=157, pocket=3}, ["grepaberry"]    = {id=157, pocket=3},
+    ["tamato berry"]   = {id=158, pocket=3}, ["tamatoberry"]   = {id=158, pocket=3},
+    ["cornn berry"]    = {id=159, pocket=3}, ["cornnberry"]    = {id=159, pocket=3},
+    ["magost berry"]   = {id=160, pocket=3}, ["magostberry"]   = {id=160, pocket=3},
+    ["rabuta berry"]   = {id=161, pocket=3}, ["rabutaberry"]   = {id=161, pocket=3},
+    ["nomel berry"]    = {id=162, pocket=3}, ["nomelberry"]    = {id=162, pocket=3},
+    ["spelon berry"]   = {id=163, pocket=3}, ["spelonberry"]   = {id=163, pocket=3},
+    ["pamtre berry"]   = {id=164, pocket=3}, ["pamtreberry"]   = {id=164, pocket=3},
+    ["watmel berry"]   = {id=165, pocket=3}, ["watmelberry"]   = {id=165, pocket=3},
+    ["durin berry"]    = {id=166, pocket=3}, ["durinberry"]    = {id=166, pocket=3},
+    ["belue berry"]    = {id=167, pocket=3}, ["belueberry"]    = {id=167, pocket=3},
+    ["liechi berry"]   = {id=168, pocket=3}, ["liechiberry"]   = {id=168, pocket=3},
+    ["ganlon berry"]   = {id=169, pocket=3}, ["ganlonberry"]   = {id=169, pocket=3},
+    ["salac berry"]    = {id=170, pocket=3}, ["salacberry"]    = {id=170, pocket=3},
+    ["petaya berry"]   = {id=171, pocket=3}, ["petayaberry"]   = {id=171, pocket=3},
+    ["apicot berry"]   = {id=172, pocket=3}, ["apicotberry"]   = {id=172, pocket=3},
+    ["lansat berry"]   = {id=173, pocket=3}, ["lansatberry"]   = {id=173, pocket=3},
+    ["starf berry"]    = {id=174, pocket=3}, ["starfberry"]    = {id=174, pocket=3},
+    ["enigma berry"]   = {id=175, pocket=3}, ["enigmaberry"]   = {id=175, pocket=3},
 }
 
 -- Give item by name — Maren should always use this, not raw IDs
