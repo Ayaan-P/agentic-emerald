@@ -319,6 +319,14 @@ function GM.giveFullRestore(quantity) return GM.giveItem(23, quantity) end      
 function GM.giveRevive(quantity) return GM.giveItem(28, quantity) end                           -- Revive
 function GM.giveMaxRevive(quantity) return GM.giveItem(29, quantity) end                        -- Max Revive
 
+-- Berries (go in Berry Pouch — pocket 3)
+-- IDs from pokeemerald decomp (BPEE USA)
+function GM.givePechaberry(quantity) return GM.giveItem(135, quantity, GM.POCKET.BERRIES) end   -- Pecha Berry (cures poison)
+function GM.giveSitrusBerry(quantity) return GM.giveItem(142, quantity, GM.POCKET.BERRIES) end  -- Sitrus Berry (restores 1/4 HP)
+function GM.giveOranBerry(quantity) return GM.giveItem(139, quantity, GM.POCKET.BERRIES) end    -- Oran Berry (restores 10 HP)
+function GM.giveLumBerry(quantity) return GM.giveItem(141, quantity, GM.POCKET.BERRIES) end     -- Lum Berry (cures all status)
+function GM.giveLeppaberry(quantity) return GM.giveItem(138, quantity, GM.POCKET.BERRIES) end   -- Leppa Berry (restores PP)
+
 -- =============================================================================
 -- SUBSTRUCT ORDER FOR ENCRYPTION
 -- =============================================================================

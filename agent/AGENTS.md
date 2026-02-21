@@ -57,7 +57,12 @@ GM.teachMove(slot, moveId, moveSlot)
 GM.setShiny(slot)
 
 -- Items (give to bag)
-GM.giveItem(itemId, qty)  -- Rare Candy=68, Sitrus=158, Oran=155, Pecha=133, Antidote=14
+GM.giveItem(itemId, qty)  -- Rare Candy=68, Antidote=14
+GM.giveSitrusBerry(qty)   -- Sitrus Berry → Berry Pouch (NOT giveItem!)
+GM.giveOranBerry(qty)     -- Oran Berry → Berry Pouch
+GM.givePechaberry(qty)    -- Pecha Berry → Berry Pouch
+GM.giveLumBerry(qty)      -- Lum Berry → Berry Pouch
+-- ⚠️ NEVER use giveItem() for berries — wrong IDs, wrong pocket
 
 -- ⚠️ RULES:
 -- Use GM.addEVs(slot, "stat", amount) for ALL rewards. GM.setEVs no longer exists — use GM.resetEVs ONLY for full spreads (e.g. restoring after a wipe)
