@@ -850,48 +850,59 @@ function Events.checkFrame()
     end
     
     -- 3. BADGES
-    -- Skip during battle — save block pointer shifts during battle init, causing false reads
-    if not Events.tracked.inBattle then
-        local sb1 = Events.getSaveBlock1()
-        if sb1 ~= 0 then
-            local badges, badgeCount = Events.getBadges()
+    -- Root cause: save block pointer shifts during battles AND PC/box access, causing
+    -- the badge offset to read garbage bits. Fix: track badge COUNT (not raw bitmask),
+    -- require count to strictly increase, and hold for 60 frames (~1s) before firing.
+    local sb1 = Events.getSaveBlock1()
+    if sb1 ~= 0 then
+        local badges, badgeCount = Events.getBadges()
 
-            -- Initialize tracked.badges on first valid read (don't fire event)
-            if Events.tracked.badgesInitialized == nil then
-                Events.tracked.badges = badges
-                Events.tracked.badgesInitialized = true
-                Events.tracked.badgePendingFrames = 0
-                console:log("🏅 Badge init: " .. badgeCount .. " badges (first read)")
-            elseif badges ~= Events.tracked.badges then
-                -- Debounce: require the new value to hold for 3 consecutive frames
-                if Events.tracked.badgePendingValue == badges then
-                    Events.tracked.badgePendingFrames = (Events.tracked.badgePendingFrames or 0) + 1
-                else
-                    Events.tracked.badgePendingValue = badges
-                    Events.tracked.badgePendingFrames = 1
-                end
+        -- Initialize on first valid read (don't fire event)
+        if Events.tracked.badgesInitialized == nil then
+            Events.tracked.badges = badges
+            Events.tracked.badgeCount = badgeCount
+            Events.tracked.badgesInitialized = true
+            Events.tracked.badgePendingCount = nil
+            Events.tracked.badgePendingFrames = 0
+            console:log("🏅 Badge init: " .. badgeCount .. " badges (first read)")
 
-                if (Events.tracked.badgePendingFrames or 0) >= 3 then
-                    local oldBadges = Events.tracked.badges
-                    console:log("🏅 Badge change: " .. oldBadges .. " → " .. badges .. " (count: " .. badgeCount .. ")")
-                    Events.tracked.badges = badges
-                    Events.tracked.badgePendingFrames = 0
-
-                    -- Only fire if gained badges (not lost)
-                    if badgeCount > 0 and badges > oldBadges then
-                        Events.emit("badge_obtained", {
-                            oldBadges = oldBadges,
-                            newBadges = badges,
-                            badgeCount = badgeCount,
-                        })
-                    end
-                end
+        -- Only care if the COUNT increased (not just bitmask noise)
+        elseif badgeCount > (Events.tracked.badgeCount or 0) then
+            -- Debounce: new count must hold for 60 consecutive frames (~1 second)
+            if Events.tracked.badgePendingCount == badgeCount then
+                Events.tracked.badgePendingFrames = (Events.tracked.badgePendingFrames or 0) + 1
             else
-                Events.tracked.badgePendingFrames = 0  -- reset if value reverted
+                Events.tracked.badgePendingCount = badgeCount
+                Events.tracked.badgePendingFrames = 1
+            end
+
+            if Events.tracked.badgePendingFrames >= 60 then
+                local oldCount = Events.tracked.badgeCount
+                console:log("🏅 Badge confirmed: " .. oldCount .. " → " .. badgeCount)
+                Events.tracked.badges = badges
+                Events.tracked.badgeCount = badgeCount
+                Events.tracked.badgePendingCount = nil
+                Events.tracked.badgePendingFrames = 0
+
+                Events.emit("badge_obtained", {
+                    oldBadges = oldCount,
+                    newBadges = badges,
+                    badgeCount = badgeCount,
+                })
+            end
+        else
+            -- Count didn't increase (bitmask noise, battle, PC access) — reset pending
+            Events.tracked.badgePendingCount = nil
+            Events.tracked.badgePendingFrames = 0
+            -- If count decreased (save state reload), silently re-sync
+            if badgeCount < (Events.tracked.badgeCount or 0) then
+                Events.tracked.badges = badges
+                Events.tracked.badgeCount = badgeCount
+                console:log("🏅 Badge sync (reload?): " .. badgeCount .. " badges")
             end
         end
     end
-    -- If inBattle or sb1 == 0, skip badge processing entirely this frame
+    -- If sb1 == 0, skip badge processing entirely this frame
     
     -- 4. PARTY CHANGES (including catch detection)
     local partyHash = Events.hashParty()
