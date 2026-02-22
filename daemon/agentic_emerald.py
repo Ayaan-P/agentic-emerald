@@ -18,6 +18,7 @@ import sys
 import threading
 import uuid
 import argparse
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -58,6 +59,197 @@ def load_species_names(species_file: Path) -> dict:
     except Exception as e:
         print(f"[SPECIES] Warning: {e}")
     return names
+
+
+def _is_wsl() -> bool:
+    """Detect if running inside WSL (Windows Subsystem for Linux)."""
+    try:
+        with open('/proc/version') as f:
+            content = f.read().lower()
+            return 'microsoft' in content or 'wsl' in content
+    except Exception:
+        return False
+
+
+def _get_windows_ip() -> str:
+    """Get the Windows host IP from WSL's /etc/resolv.conf nameserver."""
+    try:
+        result = subprocess.run(['cat', '/etc/resolv.conf'], capture_output=True, text=True, timeout=2)
+        for line in result.stdout.split('\n'):
+            if line.startswith('nameserver'):
+                ip = line.split()[1]
+                # Only return RFC 1918 addresses (Windows host is always private)
+                if ip.startswith(('10.', '172.', '192.168.')):
+                    return ip
+    except Exception:
+        pass
+    return ''
+
+
+def check_setup(config_path: Path):
+    """
+    Validate the full setup without starting the daemon.
+    Run with: python3 daemon/agentic_emerald.py --check
+    """
+    C = Colors
+    errors = []
+    warnings = []
+
+    print(f"\n{C.BOLD}{C.CYAN}╔══════════════════════════════════════════════╗")
+    print(f"║  Agentic Emerald — Setup Check               ║")
+    print(f"╚══════════════════════════════════════════════╝{C.RESET}\n")
+
+    # ── 1. Config file ────────────────────────────────────────────────────
+    print(f"{C.BOLD}Config{C.RESET}")
+    if not config_path.exists():
+        print(f"  {C.RED}✗ config.yaml not found: {config_path}{C.RESET}")
+        print(f"  {C.DIM}  → Run: cp config.example.yaml config.yaml  then edit it{C.RESET}")
+        errors.append("config_missing")
+        _print_check_result(errors, warnings)
+        return
+    else:
+        print(f"  {C.GREEN}✓ {config_path}{C.RESET}")
+
+    try:
+        import yaml
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        print(f"  {C.GREEN}✓ Parsed OK{C.RESET}")
+    except Exception as e:
+        print(f"  {C.RED}✗ Parse error: {e}{C.RESET}")
+        errors.append("config_invalid")
+        _print_check_result(errors, warnings)
+        return
+
+    # ── 2. Socket connection ──────────────────────────────────────────────
+    print(f"\n{C.BOLD}mGBA Connection{C.RESET}")
+    emu = config.get('emulator', {})
+    host = emu.get('host', '127.0.0.1')
+    port = emu.get('port', 8888)
+    print(f"  Configured: {C.CYAN}{host}:{port}{C.RESET}")
+
+    try:
+        s = socket.socket()
+        s.settimeout(3)
+        s.connect((host, port))
+        s.close()
+        print(f"  {C.GREEN}✓ mGBA connected — Lua script is running{C.RESET}")
+    except ConnectionRefusedError:
+        print(f"  {C.YELLOW}⚠  mGBA not reachable (connection refused){C.RESET}")
+        print(f"  {C.DIM}  → Open mGBA → load ROM → Tools → Scripting → load lua/game_master_v2.lua{C.RESET}")
+        if host == '127.0.0.1' and _is_wsl():
+            win_ip = _get_windows_ip()
+            hint = f' Try host: "{win_ip}"' if win_ip else ''
+            print(f"  {C.YELLOW}  WSL detected: mGBA may be on Windows, not localhost.{hint}{C.RESET}")
+            print(f"  {C.DIM}  See README: WSL Setup section{C.RESET}")
+        warnings.append("mgba_not_connected")
+    except socket.timeout:
+        print(f"  {C.YELLOW}⚠  Connection timed out{C.RESET}")
+        if _is_wsl() and host == '127.0.0.1':
+            win_ip = _get_windows_ip()
+            print(f"  {C.YELLOW}  WSL + localhost: mGBA likely on Windows.{C.RESET}")
+            if win_ip:
+                print(f"  {C.YELLOW}  → Set emulator.host: \"{win_ip}\" in config.yaml{C.RESET}")
+        warnings.append("mgba_timeout")
+    except Exception as e:
+        print(f"  {C.RED}✗ Socket error: {e}{C.RESET}")
+        warnings.append("mgba_error")
+
+    # ── 3. Agent ──────────────────────────────────────────────────────────
+    print(f"\n{C.BOLD}AI Agent{C.RESET}")
+    agent_cfg = config.get('agent', {})
+    agent_mode = agent_cfg.get('mode', 'claude')
+    print(f"  Mode: {C.CYAN}{agent_mode}{C.RESET}")
+
+    if agent_mode == 'claude':
+        if shutil.which('claude'):
+            print(f"  {C.GREEN}✓ Claude CLI found ({shutil.which('claude')}){C.RESET}")
+        else:
+            print(f"  {C.RED}✗ Claude CLI not found in PATH{C.RESET}")
+            print(f"  {C.DIM}  → Install: npm install -g @anthropic-ai/claude-code{C.RESET}")
+            errors.append("claude_not_found")
+    elif agent_mode == 'codex':
+        if shutil.which('codex'):
+            print(f"  {C.GREEN}✓ Codex CLI found{C.RESET}")
+        else:
+            print(f"  {C.RED}✗ Codex CLI not found{C.RESET}")
+            errors.append("codex_not_found")
+    elif agent_mode == 'direct':
+        api_key = agent_cfg.get('api_key', '') or os.environ.get('ANTHROPIC_API_KEY', '')
+        if api_key:
+            print(f"  {C.GREEN}✓ API key found{C.RESET}")
+        else:
+            print(f"  {C.RED}✗ No API key — set api_key in config or ANTHROPIC_API_KEY env var{C.RESET}")
+            errors.append("api_key_missing")
+    elif agent_mode == 'clawdbot':
+        if shutil.which('clawdbot'):
+            print(f"  {C.GREEN}✓ Clawdbot found ({shutil.which('clawdbot')}){C.RESET}")
+        else:
+            print(f"  {C.RED}✗ Clawdbot not found{C.RESET}")
+            print(f"  {C.DIM}  → Install: npm install -g clawdbot{C.RESET}")
+            errors.append("clawdbot_not_found")
+    else:
+        print(f"  {C.YELLOW}⚠  Unknown agent mode: {agent_mode}{C.RESET}")
+        warnings.append("unknown_agent_mode")
+
+    # ── 4. Agent workspace ───────────────────────────────────────────────
+    print(f"\n{C.BOLD}Agent Workspace{C.RESET}")
+    base_path = config_path.parent
+    workspace = base_path / agent_cfg.get('workspace', './agent')
+    agents_md = workspace / 'AGENTS.md'
+    gm_narrative = workspace / 'GM_NARRATIVE.md'
+
+    if workspace.exists():
+        print(f"  {C.GREEN}✓ Directory: {workspace}{C.RESET}")
+        if agents_md.exists():
+            print(f"  {C.GREEN}✓ AGENTS.md{C.RESET}")
+        else:
+            print(f"  {C.YELLOW}⚠  AGENTS.md missing{C.RESET}")
+            warnings.append("agents_md_missing")
+        if gm_narrative.exists():
+            print(f"  {C.GREEN}✓ GM_NARRATIVE.md{C.RESET}")
+        else:
+            print(f"  {C.YELLOW}⚠  GM_NARRATIVE.md missing{C.RESET}")
+            warnings.append("gm_narrative_missing")
+    else:
+        print(f"  {C.RED}✗ Workspace not found: {workspace}{C.RESET}")
+        print(f"  {C.DIM}  → Run: ./setup.sh{C.RESET}")
+        errors.append("workspace_missing")
+
+    # ── 5. Species data ──────────────────────────────────────────────────
+    print(f"\n{C.BOLD}Data Files{C.RESET}")
+    paths = config.get('paths', {})
+    species_file = base_path / paths.get('species_file', './data/emerald_species.json')
+    if species_file.exists():
+        print(f"  {C.GREEN}✓ Species data: {species_file.name}{C.RESET}")
+    else:
+        print(f"  {C.YELLOW}⚠  Species data not found: {species_file}{C.RESET}")
+        warnings.append("species_missing")
+
+    playthrough = base_path / 'memory' / 'PLAYTHROUGH.md'
+    if playthrough.exists():
+        size = playthrough.stat().st_size
+        print(f"  {C.GREEN}✓ PLAYTHROUGH.md ({size} bytes){C.RESET}")
+    else:
+        print(f"  {C.DIM}  PLAYTHROUGH.md not found (will be created on first run){C.RESET}")
+
+    # ── Summary ──────────────────────────────────────────────────────────
+    _print_check_result(errors, warnings)
+
+
+def _print_check_result(errors: list, warnings: list):
+    C = Colors
+    print(f"\n  {'─' * 44}")
+    if errors:
+        print(f"  {C.RED}{C.BOLD}✗ {len(errors)} error(s) — fix these before running{C.RESET}")
+        sys.exit(1)
+    elif warnings:
+        print(f"  {C.YELLOW}⚠  {len(warnings)} warning(s) — OK to run, but check the notes above{C.RESET}")
+        print(f"  {C.GREEN}✓ Run: python3 daemon/agentic_emerald.py{C.RESET}")
+    else:
+        print(f"  {C.GREEN}{C.BOLD}✓ All checks passed!{C.RESET}")
+        print(f"  {C.GREEN}✓ Run: python3 daemon/agentic_emerald.py{C.RESET}")
+    print()
 
 
 # Common move names for logging
@@ -1134,15 +1326,43 @@ class PokemonGM:
             C = Colors
             self.log(f"{C.GREEN}● Ready{C.RESET}  {C.DIM}Game connected{C.RESET}")
     
+    def _print_waiting_instructions(self):
+        """Print friendly instructions when mGBA isn't connected yet."""
+        C = Colors
+        print(f"\n  {C.YELLOW}⏳ Waiting for mGBA...{C.RESET}")
+        print(f"  {C.DIM}{'─' * 52}{C.RESET}")
+        print(f"  {C.CYAN}1.{C.RESET} Open mGBA and load your Pokemon Emerald ROM")
+        print(f"  {C.CYAN}2.{C.RESET} Tools → Scripting → click {C.BOLD}\"Script...\"{C.RESET}")
+        print(f"  {C.CYAN}3.{C.RESET} Select: {C.BOLD}lua/game_master_v2.lua{C.RESET}")
+        print(f"  {C.CYAN}4.{C.RESET} Scripting console should show:")
+        print(f"     {C.DIM}[GM] Listening on {self.socket_host}:{self.socket_port}{C.RESET}")
+
+        if _is_wsl() and self.socket_host == '127.0.0.1':
+            win_ip = _get_windows_ip()
+            print(f"\n  {C.YELLOW}  WSL detected:{C.RESET} If mGBA is on Windows, use the Windows IP:")
+            if win_ip:
+                print(f"  {C.YELLOW}  → Set emulator.host: \"{win_ip}\" in config.yaml{C.RESET}")
+            else:
+                print(f"  {C.YELLOW}  → Run ipconfig on Windows → find 'vEthernet (WSL)' IP{C.RESET}")
+            print(f"  {C.YELLOW}  → See README: WSL Setup section{C.RESET}")
+
+        print(f"\n  {C.DIM}Tip: Run with --check to validate your full setup first{C.RESET}")
+        print(f"  {C.DIM}Retrying every 5 seconds...{C.RESET}\n")
+
     def run(self):
         """Main event loop"""
         self.print_banner()
-        
+
+        _waiting_shown = False
         while True:
             if not self.connected:
                 if not self.connect():
+                    if not _waiting_shown:
+                        self._print_waiting_instructions()
+                        _waiting_shown = True
                     time.sleep(5)
                     continue
+                _waiting_shown = False  # Reset on successful connect
             
             try:
                 ready = select.select([self.sock], [], [], 0.1)
@@ -1169,18 +1389,33 @@ class PokemonGM:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Agentic Emerald Daemon")
+    parser = argparse.ArgumentParser(
+        description="Agentic Emerald Daemon — AI Game Master for Pokemon Emerald",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python3 daemon/agentic_emerald.py             # Start the daemon
+  python3 daemon/agentic_emerald.py --check     # Validate setup without starting
+  python3 daemon/agentic_emerald.py -c /path/to/config.yaml  # Custom config
+        """
+    )
     parser.add_argument('-c', '--config', default='config.yaml',
                         help='Path to config file (default: config.yaml)')
+    parser.add_argument('--check', action='store_true',
+                        help='Validate setup (config, mGBA connection, agent) without starting')
     args = parser.parse_args()
-    
+
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = Path.cwd() / config_path
-    
+
+    if args.check:
+        check_setup(config_path)
+        return
+
     config = load_config(config_path)
     base_path = config_path.parent
-    
+
     gm = PokemonGM(config, base_path)
     gm.run()
 

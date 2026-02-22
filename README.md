@@ -55,28 +55,45 @@ The GM observes gameplay events and triggers rewards:
 git clone https://github.com/Ayaan-P/agentic-emerald.git
 cd agentic-emerald
 
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Copy and edit config
-cp config.example.yaml config.yaml
-# Edit config.yaml with your paths and settings
+# Run setup (installs deps + interactive config wizard)
+./setup.sh
 ```
+
+The setup wizard will ask you:
+- Where mGBA is running (same machine, Windows, or remote IP)
+- Which agent mode to use (Claude CLI, Codex, direct API, Clawdbot)
+
+**WSL users:** The wizard auto-detects WSL and suggests your Windows host IP.
 
 ### Setup mGBA
 
 1. **Open a Pokemon Emerald ROM** in mGBA
 2. **Tools → Scripting** → Click "Script..." button
 3. **Select** `lua/game_master_v2.lua` from your agentic-emerald directory
-4. **Console** should show: `[GM] Connected to daemon on 127.0.0.1:8888`
-   - If no connection yet, that's OK — the daemon will connect when it starts
-5. Keep the Scripting console open while playing
+4. **Console** should show: `[GM] Listening on 127.0.0.1:8888`
+   - If using WSL, the Lua script connects to the daemon — make sure the IP in config.yaml matches
+
+### Validate Your Setup
+
+Before your first run, check everything is wired up:
+
+```bash
+python3 daemon/agentic_emerald.py --check
+```
+
+This validates:
+- `config.yaml` exists and parses correctly
+- mGBA is reachable at the configured host/port
+- Your agent (Claude CLI / API key / Clawdbot) is available
+- Agent workspace and data files are present
+
+WSL users: `--check` auto-detects Windows and suggests the correct host IP if you're on `127.0.0.1`.
 
 ### Run
 
 ```bash
-# Start the daemon (after mGBA is running with Lua script)
-python daemon/agentic_emerald.py
+# Start the daemon
+python3 daemon/agentic_emerald.py
 
 # Start playing — the GM is watching
 ```
@@ -253,18 +270,59 @@ This gives you session persistence, multi-agent orchestration, and other Clawdbo
 
 ## Troubleshooting
 
+### First: Run the setup checker
+
+```bash
+python3 daemon/agentic_emerald.py --check
+```
+
+This diagnoses config, mGBA connection, and agent availability in one shot. Fix anything it flags before going further.
+
 ### Lua script fails to load in mGBA
 - **Check mGBA version:** Lua scripting requires 0.10.1+
 - **Check ROM:** Only English Gen 3 Emerald is tested
 - **Try direct path:** Some versions need full path to script
 
 ### Daemon won't connect to mGBA
-- **Check emulator config:** Edit `config.yaml` — match host/port in mGBA Lua console
-- **WSL users:** If mGBA is on Windows, use your WSL IP (e.g., `192.168.x.x`) in config, not `127.0.0.1`
+
+```bash
+# Check what host you've configured
+grep host config.yaml
+```
+
+- **Same machine:** Should be `127.0.0.1`
+- **WSL users:** mGBA is on Windows, daemon is in WSL — they can't share `127.0.0.1`
+  - Run `--check` — it auto-detects WSL and suggests the correct Windows IP
+  - Or: run `ipconfig` on Windows → look for "vEthernet (WSL)" → use that IPv4 address
 - **Firewall:** Allow Python on port 8888 (or your configured port)
 
+### WSL Setup (Windows mGBA + WSL daemon)
+
+This is the most common setup issue. The daemon runs in WSL but mGBA is a Windows app — they can't use `127.0.0.1` to talk to each other.
+
+**Fix:**
+
+```bash
+# Auto-detect your Windows IP
+python3 daemon/agentic_emerald.py --check
+# Look for: "WSL detected: Try host: X.X.X.X"
+
+# Or manually: in Windows PowerShell
+ipconfig | Select-String "vEthernet (WSL)" -Context 0,3
+# Use the "IPv4 Address" shown
+```
+
+Then update `config.yaml`:
+```yaml
+emulator:
+  host: "172.28.208.1"  # Replace with your actual Windows IP
+  port: 8888
+```
+
+**Note:** The Windows IP changes on reboot. If things stop working after restart, run `--check` again.
+
 ### No agent response
-- **Check agent mode:** Run `cat config.yaml | grep "mode:"`
+- **Check agent mode:** Run `grep mode config.yaml`
 - **Claude CLI:** Make sure `claude` is in PATH (`which claude`)
 - **Direct API:** Verify `ANTHROPIC_API_KEY` is set (`echo $ANTHROPIC_API_KEY`)
 - **Clawdbot:** Verify agent registered (`clawdbot agent status agentic-emerald`)
@@ -272,7 +330,7 @@ This gives you session persistence, multi-agent orchestration, and other Clawdbo
 ### Rewards aren't applying
 - **Check Lua console:** Look for errors like `GM: Invalid moveId`
 - **Check PLAYTHROUGH.md:** The agent should log decisions here
-- **Check daemon logs:** Run daemon with `-v` flag for verbose output
+- **Check daemon logs:** Run `--check` first, then watch daemon terminal output for `★ VISIBLE` vs `⚡ EV` markers
 
 ## Contributing
 

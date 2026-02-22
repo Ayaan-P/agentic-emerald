@@ -33,7 +33,7 @@ echo -e "${CYAN}[2/5]${RESET} Installing dependencies..."
 pip3 install -r requirements.txt -q
 echo -e "  ${GREEN}✓ Dependencies installed${RESET}"
 
-# ── Step 3: Create config ────────────────────────────────────────────────
+# ── Step 3: Create config (interactive wizard for new installs) ──────────
 echo -e "${CYAN}[3/5]${RESET} Config setup..."
 if [ -f "config.yaml" ]; then
     echo -e "  ${GREEN}✓ config.yaml already exists (skipping)${RESET}"
@@ -41,8 +41,95 @@ else
     cp config.example.yaml config.yaml
     echo -e "  ${GREEN}✓ Created config.yaml from example${RESET}"
     echo ""
-    echo -e "  ${YELLOW}⚠  Edit config.yaml before running the daemon.${RESET}"
-    echo -e "  ${YELLOW}   Key setting: agent.mode (use 'claude' if you have Claude CLI)${RESET}"
+    echo -e "  ${BOLD}Quick setup wizard:${RESET}"
+    echo -e "  ${CYAN}(Press Enter to accept defaults, or type a value)${RESET}"
+    echo ""
+
+    # ── Detect WSL ─────────────────────────────────────────────────────
+    IS_WSL=false
+    if grep -qi microsoft /proc/version 2>/dev/null || grep -qi wsl /proc/version 2>/dev/null; then
+        IS_WSL=true
+    fi
+
+    # ── Where is mGBA running? ─────────────────────────────────────────
+    if [ "$IS_WSL" = "true" ]; then
+        # Try to get Windows host IP from resolv.conf
+        WIN_IP=$(grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | grep -E '^(10\.|172\.|192\.168\.)' | head -1)
+        echo -e "  ${YELLOW}WSL detected!${RESET} mGBA is likely running on Windows."
+        if [ -n "$WIN_IP" ]; then
+            echo -e "  Detected Windows IP: ${CYAN}${WIN_IP}${RESET}"
+            echo -n "  Use this as emulator host? [Y/n]: "
+            read -r USE_WIN_IP
+            if [[ "$USE_WIN_IP" =~ ^[Nn] ]]; then
+                echo -n "  Enter emulator host (IP or hostname): "
+                read -r EMU_HOST
+                EMU_HOST="${EMU_HOST:-127.0.0.1}"
+            else
+                EMU_HOST="$WIN_IP"
+            fi
+        else
+            echo -e "  ${YELLOW}Could not auto-detect Windows IP.${RESET}"
+            echo -e "  Run ${BOLD}ipconfig${RESET} on Windows → look for 'vEthernet (WSL)' IPv4 address"
+            echo -n "  Enter emulator host [127.0.0.1]: "
+            read -r EMU_HOST
+            EMU_HOST="${EMU_HOST:-127.0.0.1}"
+        fi
+    else
+        echo -n "  mGBA running on same machine? [Y/n]: "
+        read -r SAME_MACHINE
+        if [[ "$SAME_MACHINE" =~ ^[Nn] ]]; then
+            echo -n "  Enter mGBA host (IP of the machine running mGBA): "
+            read -r EMU_HOST
+            EMU_HOST="${EMU_HOST:-127.0.0.1}"
+        else
+            EMU_HOST="127.0.0.1"
+        fi
+    fi
+
+    # Apply host to config.yaml
+    if [ "$EMU_HOST" != "127.0.0.1" ]; then
+        sed -i "s/host: \"127.0.0.1\"/host: \"${EMU_HOST}\"/" config.yaml
+        echo -e "  ${GREEN}✓ Set emulator.host: ${EMU_HOST}${RESET}"
+    else
+        echo -e "  ${GREEN}✓ emulator.host: 127.0.0.1 (localhost)${RESET}"
+    fi
+
+    echo ""
+
+    # ── Agent mode ─────────────────────────────────────────────────────
+    DETECTED_AGENTS=()
+    if command -v claude &>/dev/null; then
+        DETECTED_AGENTS+=("claude (found: $(which claude))")
+    fi
+    if command -v codex &>/dev/null; then
+        DETECTED_AGENTS+=("codex (found: $(which codex))")
+    fi
+    if command -v clawdbot &>/dev/null; then
+        DETECTED_AGENTS+=("clawdbot (found: $(which clawdbot))")
+    fi
+    if [ -n "$ANTHROPIC_API_KEY" ]; then
+        DETECTED_AGENTS+=("direct (ANTHROPIC_API_KEY is set)")
+    fi
+
+    if [ ${#DETECTED_AGENTS[@]} -gt 0 ]; then
+        echo -e "  Detected agent options:"
+        for agent in "${DETECTED_AGENTS[@]}"; do
+            echo -e "    ${GREEN}✓${RESET} $agent"
+        done
+        echo ""
+    fi
+
+    echo -e "  Agent modes: ${BOLD}claude${RESET} | codex | direct | clawdbot"
+    echo -n "  Agent mode [claude]: "
+    read -r AGENT_MODE
+    AGENT_MODE="${AGENT_MODE:-claude}"
+
+    sed -i "s/mode: \"claude\"/mode: \"${AGENT_MODE}\"/" config.yaml
+    echo -e "  ${GREEN}✓ Set agent.mode: ${AGENT_MODE}${RESET}"
+
+    echo ""
+    echo -e "  ${GREEN}✓ config.yaml ready${RESET}"
+    echo -e "  ${DIM}  You can edit config.yaml manually to change any setting.${RESET}"
     echo ""
 fi
 
@@ -83,11 +170,12 @@ echo ""
 echo -e "${BOLD}${GREEN}Setup complete!${RESET}"
 echo ""
 echo -e "${BOLD}Next steps:${RESET}"
-echo -e "  1. ${CYAN}Edit config.yaml${RESET} — set your agent mode and emulator host"
-echo -e "  2. ${CYAN}Open mGBA${RESET} → load your Pokemon Emerald ROM"
-echo -e "  3. ${CYAN}In mGBA:${RESET} Tools → Scripting → load ${BOLD}lua/game_master_v2.lua${RESET}"
+echo -e "  1. ${CYAN}Open mGBA${RESET} → load your Pokemon Emerald ROM"
+echo -e "  2. ${CYAN}In mGBA:${RESET} Tools → Scripting → load ${BOLD}lua/game_master_v2.lua${RESET}"
+echo -e "  3. ${CYAN}Validate your setup:${RESET} ${BOLD}python3 daemon/agentic_emerald.py --check${RESET}"
 echo -e "  4. ${CYAN}Run the daemon:${RESET} ${BOLD}python3 daemon/agentic_emerald.py${RESET}"
 echo -e "  5. ${CYAN}Play.${RESET} Maren is watching."
 echo ""
 echo -e "${BOLD}Docs:${RESET} See README.md for full setup details and troubleshooting."
+echo -e "${BOLD}Stuck?${RESET} Run: ${BOLD}python3 daemon/agentic_emerald.py --check${RESET} for diagnostics"
 echo ""
