@@ -370,6 +370,13 @@ class PokemonGM:
         self.reward_history = []       # Recent reward types: 'visible', 'ev', 'none'
         self.ev_drought_count = 0      # Consecutive EV-only / no-action rewards
         self.session_visible_rewards = 0  # Visible rewards this session
+
+        # GRIND_SUMMARY tracking (AgentConductor-inspired — issue #15)
+        # When N events are skipped OR 10 minutes pass without an agent invoke,
+        # synthesize a lightweight GRIND_SUMMARY to keep Maren's narrative continuity.
+        self.last_agent_invoke_time = time.time()
+        self.GRIND_BATCH_SIZE = 8       # Trigger after this many skipped events
+        self.GRIND_TIMEOUT_SEC = 600    # Trigger after 10 min of silence
         
         # Battle tracking
         self.battle_history = []
@@ -613,7 +620,7 @@ class PokemonGM:
         Returns: uncertainty score (0-1)
         """
         # High uncertainty — always invoke
-        if event_type in ('BADGE_OBTAINED', 'TRAINER_REMATCH'):
+        if event_type in ('BADGE_OBTAINED', 'TRAINER_REMATCH', 'GRIND_SUMMARY'):
             return 1.0
         
         # Battle outcomes — depends on context
@@ -695,35 +702,95 @@ class PokemonGM:
     def _get_pending_arcs(self) -> list:
         """
         Extract pending arc payoffs from PLAYTHROUGH.md.
-        Looks for lines with explicit pending markers that Maren has promised.
+
+        Primary: parses the structured ## ARC LEDGER markdown table.
+        Rows with Status = PENDING or IMMEDIATE are returned as clear instructions.
+
+        Fallback: keyword scan for legacy freeform arc markers (pre-ledger format).
+
         Returns up to 5 pending arcs for injection into the agent prompt.
         """
         playthrough = self.memory_dir / 'PLAYTHROUGH.md'
         pending = []
-        markers = [
-            'IMMEDIATE PAYOFF:',
-            'PENDING PAYOFF:',
-            'PENDING:',
-            'STATUS:',
-            'PAYOFF OWED:',
-            '→ immediate shiny',
-            '→ give it',
-            '→ teach',
-        ]
+
         try:
-            if playthrough.exists():
-                for line in playthrough.read_text().split('\n'):
-                    stripped = line.strip()
-                    # Skip very short lines and section headers
-                    if len(stripped) < 20:
+            if not playthrough.exists():
+                return []
+
+            text = playthrough.read_text()
+
+            # ── Primary: parse structured ARC LEDGER table ────────────────
+            # Find the ARC LEDGER section
+            in_ledger = False
+            header_seen = False
+            separator_seen = False
+
+            for line in text.split('\n'):
+                stripped = line.strip()
+
+                if stripped.startswith('## ARC LEDGER'):
+                    in_ledger = True
+                    continue
+
+                # Stop at next section heading
+                if in_ledger and stripped.startswith('## ') and 'ARC LEDGER' not in stripped:
+                    break
+
+                if not in_ledger:
+                    continue
+
+                # Skip HTML comments
+                if stripped.startswith('<!--'):
+                    continue
+
+                # Detect table header row (contains 'Arc' and 'Status')
+                if '| Arc' in stripped and '| Status' in stripped:
+                    header_seen = True
+                    continue
+
+                # Skip separator row (|---|---|...)
+                if header_seen and not separator_seen and stripped.startswith('|') and '---' in stripped:
+                    separator_seen = True
+                    continue
+
+                # Parse data rows
+                if header_seen and separator_seen and stripped.startswith('|'):
+                    parts = [p.strip() for p in stripped.strip('|').split('|')]
+                    if len(parts) >= 4:
+                        arc_name  = parts[0].strip()
+                        pokemon   = parts[1].strip()
+                        status    = parts[2].strip().upper()
+                        promise   = parts[3].strip()
+                        priority  = parts[4].strip().upper() if len(parts) > 4 else 'MEDIUM'
+
+                        if status in ('PENDING', 'IMMEDIATE'):
+                            urgency = '🔴 IMMEDIATE' if status == 'IMMEDIATE' else '🟡 PENDING'
+                            entry = f"{urgency} [{priority}] {arc_name} ({pokemon}): {promise}"
+                            pending.append(entry)
+
+            # ── Fallback: legacy freeform markers ─────────────────────────
+            if not pending:
+                markers = [
+                    'IMMEDIATE PAYOFF:',
+                    'PENDING PAYOFF:',
+                    'PENDING:',
+                    'PAYOFF OWED:',
+                    '→ immediate shiny',
+                    '→ give it',
+                    '→ teach',
+                ]
+                for line in text.split('\n'):
+                    s = line.strip()
+                    if len(s) < 20:
                         continue
-                    if any(m.lower() in stripped.lower() for m in markers):
-                        # Clean up markdown formatting
-                        clean = stripped.lstrip('*- ').rstrip('*')
+                    if any(m.lower() in s.lower() for m in markers):
+                        clean = s.lstrip('*- ').rstrip('*')
                         if clean:
                             pending.append(clean)
+
         except Exception:
             pass
+
         return pending[:5]
     
     def prompt_agent_async(self, event_type: str, context: dict):
@@ -751,6 +818,7 @@ class PokemonGM:
         
         def run_agent():
             self.agent_busy = True
+            self.last_agent_invoke_time = time.time()  # Track for GRIND_SUMMARY timeout
             try:
                 prompt = self.build_prompt(event_type, context)
                 C = Colors
@@ -1065,6 +1133,26 @@ class PokemonGM:
                 dialogues = state.get('dialogueTexts', [])
                 for i, text in enumerate(dialogues[:5]):
                     prompt += f"  NPC {i+1}: \"{text[:100]}{'...' if len(text) > 100 else ''}\"\n"
+
+        elif event_type == 'GRIND_SUMMARY':
+            # Lightweight batch prompt — triggered after long stretch of routine events
+            # or extended silence (AgentConductor-inspired: dynamic event batching)
+            skipped_count = ctx.get('skipped_count', len(self.skipped_events))
+            elapsed_min = ctx.get('elapsed_minutes', 0)
+            reason = ctx.get('reason', 'batch')
+
+            prompt += f"=== GRIND SUMMARY ===\n"
+            if reason == 'timeout':
+                prompt += f"It's been {elapsed_min:.0f} minutes since Maren last made a decision.\n"
+            else:
+                prompt += f"{skipped_count} routine events have passed since your last decision.\n"
+            prompt += "The player has been grinding — wild battles, exploring, the usual.\n"
+            prompt += "No single event was significant enough to trigger a decision on its own.\n\n"
+            prompt += "Your job now:\n"
+            prompt += "1. Check the ARC LEDGER below. Is there a payoff you've been deferring?\n"
+            prompt += "2. Has enough grind happened that an encouragement is warranted?\n"
+            prompt += "3. If nothing warrants action, that's OK — say OBSERVATION: Watching, and ACTION: none\n"
+            prompt += "Keep it brief. This is a check-in, not a major event.\n"
         
         # Add accumulated skipped events as context
         if self.skipped_events:
@@ -1374,6 +1462,34 @@ class PokemonGM:
                                 self.process_event(json.loads(line))
                             except json.JSONDecodeError:
                                 pass
+
+                # ── GRIND_SUMMARY check (AgentConductor-inspired — issue #15) ──
+                # Trigger a lightweight batch prompt if:
+                #   (a) N skipped events have accumulated, OR
+                #   (b) GRIND_TIMEOUT_SEC have elapsed since last agent invocation
+                # Only when agent is idle and game is connected.
+                if not self.agent_busy and self.skipped_events:
+                    now = time.time()
+                    elapsed = now - self.last_agent_invoke_time
+                    batch_full = len(self.skipped_events) >= self.GRIND_BATCH_SIZE
+                    timed_out  = elapsed >= self.GRIND_TIMEOUT_SEC
+
+                    if batch_full or timed_out:
+                        reason = 'batch' if batch_full else 'timeout'
+                        elapsed_min = elapsed / 60
+                        C = Colors
+                        self.log(
+                            f"{C.DIM}⏱ GRIND_SUMMARY ({reason}, "
+                            f"{len(self.skipped_events)} skipped, "
+                            f"{elapsed_min:.1f}min since last invoke){C.RESET}"
+                        )
+                        self.prompt_agent_async('GRIND_SUMMARY', {
+                            'state': self.current_state,
+                            'skipped_count': len(self.skipped_events),
+                            'elapsed_minutes': elapsed_min,
+                            'reason': reason,
+                        })
+
             except (BlockingIOError, ConnectionResetError):
                 if isinstance(sys.exc_info()[1], ConnectionResetError):
                     self.log("❌ Connection lost, reconnecting...")

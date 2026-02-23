@@ -4,6 +4,22 @@
 
 ---
 
+## ARC LEDGER
+<!-- MACHINE-READABLE: Daemon parses this table for pending payoffs. -->
+<!-- Statuses: PENDING | IMMEDIATE | DELIVERED | CANCELLED -->
+<!-- Priority: HIGH | MEDIUM | LOW -->
+
+| Arc | Pokemon | Status | Promise | Priority |
+|-----|---------|--------|---------|----------|
+| The Closer Arc | Combusken | IMMEDIATE | Teach Blaze Kick (GM.teachMove(0, 299, X)) at next significant trainer victory | HIGH |
+| The Ralts Arc | Ralts | PENDING | GM.setShiny(X) the moment Ralts evolves into Kirlia | HIGH |
+| The Drainer Arc | Lombre | PENDING | GM.teachMove(X, 202, X) (Giga Drain) when Lombre is MVP of a fight | MEDIUM |
+
+<!-- To close an arc: change Status to DELIVERED and note the session/event -->
+<!-- To add a new arc: append a row. Daemon picks up PENDING and IMMEDIATE rows. -->
+
+---
+
 ## Maren Recalibrates — 2026-02-20
 
 A review of the journey revealed a hard truth: I've been too quiet.
