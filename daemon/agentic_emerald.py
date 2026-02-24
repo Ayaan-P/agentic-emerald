@@ -295,6 +295,8 @@ class PokemonGM:
         paths = config.get('paths', {})
         # Agent workspace state dir (where agent writes gm_response.txt)
         agent_workspace = base_path / agent_config.get('workspace', '../agent')
+        self.agent_workspace = agent_workspace          # store for PLAYTHROUGH.md reads
+        self.agent_memory_dir = agent_workspace / 'memory'  # where PLAYTHROUGH.md lives
         self.state_dir = agent_workspace / 'state'
         self.memory_dir = base_path / paths.get('memory_dir', './memory')
         self.events_file = self.state_dir / 'events.jsonl'
@@ -407,8 +409,8 @@ class PokemonGM:
                 content = filepath.read_text()
                 prompt_parts.append(f"# {filename}\n\n{content}")
         
-        # Load playthrough memory if exists
-        playthrough = self.memory_dir / 'PLAYTHROUGH.md'
+        # Load playthrough memory if exists (lives in agent workspace's memory dir)
+        playthrough = agent_workspace / 'memory' / 'PLAYTHROUGH.md'
         if playthrough.exists():
             content = playthrough.read_text()
             prompt_parts.append(f"# Current Playthrough Memory\n\n{content}")
@@ -710,7 +712,10 @@ class PokemonGM:
 
         Returns up to 5 pending arcs for injection into the agent prompt.
         """
-        playthrough = self.memory_dir / 'PLAYTHROUGH.md'
+        # PLAYTHROUGH.md lives in the agent's memory dir, not the daemon's memory dir.
+        # Bug fix: was reading daemon/memory/PLAYTHROUGH.md (empty) instead of
+        # agent/memory/PLAYTHROUGH.md (the real file).
+        playthrough = self.agent_memory_dir / 'PLAYTHROUGH.md'
         pending = []
 
         try:
@@ -792,7 +797,82 @@ class PokemonGM:
             pass
 
         return pending[:5]
-    
+
+    def _close_arc(self, arc_name: str) -> bool:
+        """
+        Close a delivered arc in the ARC LEDGER within PLAYTHROUGH.md.
+
+        Issue #17 — Arc delivery confirmation (MemoryArena-inspired).
+        When Maren signals ARC_CLOSED: <name>, we find the matching row
+        in the ARC LEDGER table and change its status to DELIVERED.
+
+        Returns True if a matching arc was found and updated.
+        """
+        playthrough = self.agent_memory_dir / 'PLAYTHROUGH.md'
+        if not playthrough.exists():
+            return False
+
+        try:
+            text = playthrough.read_text()
+            lines = text.split('\n')
+            updated = False
+            arc_name_lower = arc_name.lower().strip()
+
+            # Find the ARC LEDGER table and look for a matching row
+            in_ledger = False
+            header_seen = False
+            separator_seen = False
+
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+
+                if stripped.startswith('## ARC LEDGER'):
+                    in_ledger = True
+                    continue
+
+                if in_ledger and stripped.startswith('## ') and 'ARC LEDGER' not in stripped:
+                    break
+
+                if not in_ledger:
+                    continue
+
+                if '| Arc' in stripped and '| Status' in stripped:
+                    header_seen = True
+                    continue
+
+                if header_seen and not separator_seen and stripped.startswith('|') and '---' in stripped:
+                    separator_seen = True
+                    continue
+
+                if header_seen and separator_seen and stripped.startswith('|'):
+                    parts = [p.strip() for p in stripped.strip('|').split('|')]
+                    if len(parts) >= 3:
+                        row_arc = parts[0].strip().lower()
+                        row_status = parts[2].strip().upper()
+                        # Match on arc name (partial, case-insensitive) and only
+                        # close PENDING or IMMEDIATE arcs
+                        if (arc_name_lower in row_arc or row_arc in arc_name_lower) \
+                                and row_status in ('PENDING', 'IMMEDIATE'):
+                            # Replace status column with DELIVERED
+                            parts[2] = 'DELIVERED'
+                            new_row = '| ' + ' | '.join(parts) + ' |'
+                            lines[i] = new_row
+                            updated = True
+                            C = Colors
+                            self.log(
+                                f"{C.BOLD}{C.GREEN}✅ ARC CLOSED: {parts[0].strip()}{C.RESET}"
+                            )
+                            break
+
+            if updated:
+                playthrough.write_text('\n'.join(lines))
+                return True
+
+        except Exception as e:
+            self.log(f"⚠️ _close_arc failed: {e}")
+
+        return False
+
     def prompt_agent_async(self, event_type: str, context: dict):
         """Send event to AI agent in background thread (with uncertainty check)"""
         # Always invoke for high-uncertainty events, skip routine ones
@@ -849,7 +929,8 @@ class PokemonGM:
 
                     action_cmds = []  # All GM calls to execute
                     action_cmd = None  # Last ACTION: line (for reward classification)
-                    for line in response_text.split('\n')[:15]:
+                    arc_closed_name = None  # ARC_CLOSED tag if Maren signals delivery
+                    for line in response_text.split('\n')[:20]:
                         if line.strip():
                             if line.startswith('OBSERVATION:'):
                                 label = f"{C.CYAN}OBS{C.RESET}"
@@ -863,6 +944,11 @@ class PokemonGM:
                             elif line.startswith('ACTION:'):
                                 label = f"{C.GREEN}ACT{C.RESET}"
                                 content = line.split(':', 1)[1].strip()
+                            elif line.startswith('ARC_CLOSED:'):
+                                # Issue #17 — arc delivery confirmation tag
+                                label = f"{C.BOLD}{C.GREEN}ARC✓{C.RESET}"
+                                content = line.split(':', 1)[1].strip()
+                                arc_closed_name = content
                             else:
                                 label = f"{C.DIM}...{C.RESET}"
                                 content = line.strip()
@@ -875,6 +961,12 @@ class PokemonGM:
                                 action_cmd = line.split('ACTION:', 1)[1].strip()
 
                     print(f"  {C.DIM}{'─' * 56}{C.RESET}")
+
+                    # Issue #17: Arc delivery confirmation — close the arc in PLAYTHROUGH.md
+                    if arc_closed_name:
+                        closed = self._close_arc(arc_closed_name)
+                        if not closed:
+                            self.log(f"{C.DIM}⚠️ ARC_CLOSED: no match found for '{arc_closed_name}'{C.RESET}")
 
                     # Classify reward for drought tracking (use first action or action_cmd)
                     classify_target = action_cmds[0] if action_cmds else action_cmd
@@ -1172,14 +1264,47 @@ class PokemonGM:
             prompt += "\nYou've seen these events before. Build on this context, don't repeat yourself.\n"
         
         # === MAREN IMPACT SYSTEM ===
-        
-        # Inject pending arc payoffs (things Maren has promised in PLAYTHROUGH.md)
+
+        # Issue #18 (Multi-layer memory, FluxMem-inspired):
+        # HOT layer — ARC LEDGER rows always injected (see below).
+        # WARM layer — recent narrative summary, injected on significant events.
+        # COLD layer — full PLAYTHROUGH.md narrative, injected only on major beats.
+        #
+        # Major events (badge, rematch) get the full cold narrative so Maren can
+        # write a meaningful story beat. Routine events get only hot+warm to
+        # keep prompts lean and fast.
+        MAJOR_EVENTS = ('BADGE_OBTAINED', 'TRAINER_REMATCH')
+        is_major = event_type in MAJOR_EVENTS
+
+        # COLD layer — full recent narrative context on major events
+        if is_major:
+            playthrough = self.agent_memory_dir / 'PLAYTHROUGH.md'
+            if playthrough.exists():
+                try:
+                    full_text = playthrough.read_text()
+                    # Inject only the narrative sections (skip the ARC LEDGER table
+                    # to avoid duplication — arcs are injected as hot layer below).
+                    # Take last 3000 chars of narrative to keep prompt bounded.
+                    narrative_only = full_text
+                    if '## ARC LEDGER' in full_text:
+                        narrative_only = full_text[:full_text.index('## ARC LEDGER')]
+                    tail = narrative_only[-3000:] if len(narrative_only) > 3000 else narrative_only
+                    if tail.strip():
+                        prompt += f"\n=== NARRATIVE HISTORY (major event — full context) ===\n{tail}\n"
+                except Exception:
+                    pass
+
+        # HOT layer — Inject pending arc payoffs (things Maren has promised in PLAYTHROUGH.md)
         pending_arcs = self._get_pending_arcs()
         if pending_arcs:
             prompt += f"\n=== PENDING ARC PAYOFFS (you promised these in PLAYTHROUGH.md) ===\n"
             for arc in pending_arcs:
                 prompt += f"• {arc}\n"
             prompt += "\nIf this event creates an opportunity to deliver a payoff, DO IT. Don't defer again.\n"
+            # Issue #17 — Arc delivery confirmation instruction
+            prompt += ("When you deliver a promised arc, include this tag in your response:\n"
+                       "  ARC_CLOSED: <exact arc name from ledger>\n"
+                       "The daemon will automatically mark it DELIVERED in PLAYTHROUGH.md.\n")
         
         # Reward drought warning — escalate to visible if Maren has been invisible too long
         if self.ev_drought_count >= 3:
