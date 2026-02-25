@@ -278,6 +278,306 @@ class Colors:
     WHITE = "\033[97m"
 
 
+class PlayerProfileTracker:
+    """
+    Issue #19 — Explicit Player Attribute Profiling (EXACT-inspired, arxiv 2602.17695).
+
+    Tracks observable behavior signals from gameplay and distills them into explicit
+    player attributes injected into every Maren prompt for inference-time personalization.
+
+    Unlike training-time personalization, this is purely behavioral: profile updates
+    as the player plays, requiring zero extra configuration or fine-tuning.
+
+    Attributes tracked:
+        ace_pokemon         — which Pokemon is trusted most (battles led)
+        pokemon_trust       — per-species battle record
+        move_mastery        — move usage counts (signature move detection)
+        playstyle           — grinder | speedrunner | balanced | completionist
+        risk_tolerance      — close call rate (0 = cautious, 1 = reckless)
+        ace_consistency     — how loyal they are to one lead
+        type_specialization — dominant type if 40%+ exposure skews one way
+        comeback_ratio      — how often they win after a loss
+    """
+
+    PROFILE_VERSION = 2
+
+    def __init__(self, profile_path: Path, species_names: dict):
+        self.path = profile_path
+        self.species_names = species_names
+        self.profile = self._load()
+
+    def _load(self) -> dict:
+        if self.path.exists():
+            try:
+                data = json.load(open(self.path))
+                if data.get('version') == self.PROFILE_VERSION:
+                    return data
+            except Exception:
+                pass
+        return self._default()
+
+    def _default(self) -> dict:
+        return {
+            'version': self.PROFILE_VERSION,
+            'updated_at': datetime.now().isoformat(),
+            # Per-Pokemon trust: {str(species_id): {"name", "battles_led", "battles_won"}}
+            'pokemon_trust': {},
+            # Type exposure: {type_name: battle_count}
+            'type_exposure': {},
+            # Move mastery: {str(move_id): {"name", "count"}}
+            'move_mastery': {},
+            # Career totals
+            'total_battles': 0,
+            'battles_won': 0,
+            'battles_lost': 0,
+            'close_calls': 0,
+            'pokemon_caught': 0,
+            # Last-loss flag for comeback tracking
+            '_last_was_loss': False,
+            'comebacks': 0,     # wins immediately after a loss
+            # Derived attributes (recomputed on each save)
+            'attributes': {
+                'playstyle': 'unknown',
+                'risk_tolerance': 0.5,
+                'ace_consistency': 0.5,
+                'type_specialization': None,
+                'comeback_ratio': 0.5,
+            }
+        }
+
+    def _save(self):
+        self._recompute_attributes()
+        self.profile['updated_at'] = datetime.now().isoformat()
+        try:
+            with open(self.path, 'w') as f:
+                json.dump(self.profile, f, indent=2)
+        except Exception:
+            pass
+
+    def _recompute_attributes(self):
+        p = self.profile
+        attrs = p['attributes']
+        battles = p['total_battles']
+
+        # Risk tolerance — how often does the player end up in a close call?
+        if battles > 0:
+            attrs['risk_tolerance'] = round(p['close_calls'] / battles, 2)
+
+        # Ace consistency — what fraction of battles does the top trusted Pokemon lead?
+        trust = p['pokemon_trust']
+        if trust and battles > 5:
+            max_led = max(v['battles_led'] for v in trust.values())
+            attrs['ace_consistency'] = round(max_led / battles, 2)
+
+        # Comeback ratio
+        if p['battles_won'] > 0:
+            attrs['comeback_ratio'] = round(p['comebacks'] / p['battles_won'], 2)
+
+        # Playstyle inferred from battle density vs catch rate
+        if battles > 20:
+            catch_rate = p['pokemon_caught'] / battles
+            close_rate = p['close_calls'] / battles
+            if catch_rate > 0.15:
+                attrs['playstyle'] = 'completionist'
+            elif close_rate > 0.35:
+                attrs['playstyle'] = 'aggressive'
+            elif close_rate < 0.08:
+                attrs['playstyle'] = 'careful'
+            else:
+                attrs['playstyle'] = 'balanced'
+
+        # Type specialization — any type > 40% of exposure?
+        exposure = p['type_exposure']
+        if exposure:
+            total = sum(exposure.values())
+            top_type = max(exposure, key=exposure.get)
+            if total > 0 and exposure[top_type] / total > 0.40:
+                attrs['type_specialization'] = top_type
+            else:
+                attrs['type_specialization'] = None
+
+    def update_battle(self, outcome: str, party: list, was_close: bool, is_trainer: bool):
+        """Update profile from battle end event."""
+        p = self.profile
+        p['total_battles'] += 1
+
+        won = (outcome == 'won')
+        lost = (outcome == 'lost')
+
+        if won:
+            p['battles_won'] += 1
+            if p.get('_last_was_loss'):
+                p['comebacks'] += 1
+        elif lost:
+            p['battles_lost'] += 1
+
+        p['_last_was_loss'] = lost
+        if was_close:
+            p['close_calls'] += 1
+
+        # Track lead Pokemon (slot 0)
+        if party:
+            lead = party[0]
+            species_id = str(lead.get('species', 0))
+            name = self.species_names.get(int(species_id), f"Pokemon #{species_id}")
+            rec = p['pokemon_trust'].setdefault(species_id, {
+                'name': name, 'battles_led': 0, 'battles_won': 0
+            })
+            rec['battles_led'] += 1
+            if won:
+                rec['battles_won'] += 1
+
+        self._save()
+
+    def update_caught(self, species_id: int, species_name: str):
+        """Update profile when a Pokemon is caught."""
+        self.profile['pokemon_caught'] += 1
+        self._save()
+
+    def update_move_mastery(self, move_id: int, count: int, move_name: str):
+        """Update profile on move mastery milestone."""
+        self.profile['move_mastery'][str(move_id)] = {'name': move_name, 'count': count}
+        self._save()
+
+    def get_context_block(self) -> str:
+        """Format player profile as a structured context block for prompt injection."""
+        p = self.profile
+        attrs = p['attributes']
+        trust = p['pokemon_trust']
+
+        if p['total_battles'] < 3:
+            return ''   # Not enough data yet — don't inject noise
+
+        lines = ['=== PLAYER PROFILE ===']
+
+        # Ace Pokemon
+        if trust:
+            sorted_trust = sorted(trust.items(), key=lambda x: x[1]['battles_led'], reverse=True)
+            ace_id, ace_data = sorted_trust[0]
+            ace_name = ace_data['name']
+            ace_led = ace_data['battles_led']
+            ace_won = ace_data.get('battles_won', 0)
+            lines.append(f"Ace: {ace_name} — led {ace_led} battles, won {ace_won}")
+            if len(sorted_trust) > 1:
+                bench = ', '.join(f"{d['name']} ({d['battles_led']})"
+                                  for _, d in sorted_trust[1:4])
+                lines.append(f"Trusted partners: {bench}")
+
+        # Playstyle + risk
+        playstyle = attrs.get('playstyle', 'unknown')
+        risk = attrs.get('risk_tolerance', 0.5)
+        if playstyle != 'unknown':
+            lines.append(f"Playstyle: {playstyle}")
+        if risk > 0.35:
+            lines.append(f"Risk: high (close calls in {int(risk*100)}% of battles)")
+        elif risk < 0.08:
+            lines.append(f"Risk: very cautious (rarely in danger)")
+
+        # Comeback
+        comeback = attrs.get('comeback_ratio', 0)
+        if p['comebacks'] >= 2:
+            lines.append(f"Comeback player: yes ({p['comebacks']} wins after losses)")
+
+        # Ace loyalty
+        ace_cons = attrs.get('ace_consistency', 0)
+        if ace_cons > 0.70:
+            lines.append(f"Ace loyalty: very high ({int(ace_cons*100)}% battles led by ace)")
+
+        # Type identity
+        type_spec = attrs.get('type_specialization')
+        if type_spec:
+            lines.append(f"Type identity: {type_spec} trainer")
+
+        # Signature move
+        mastery = p.get('move_mastery', {})
+        if mastery:
+            top_move = max(mastery.values(), key=lambda x: x['count'])
+            lines.append(f"Signature move: {top_move['name']} (used {top_move['count']}x)")
+
+        lines.append(f"Career: {p['total_battles']} battles | {p['pokemon_caught']} caught | {p['close_calls']} clutch moments")
+        lines.append('=== END PLAYER PROFILE ===')
+        return '\n'.join(lines)
+
+
+class DecisionLogger:
+    """
+    Issue #20 — Maren Decision Library (MAS-on-the-Fly-inspired, arxiv 2602.13671).
+
+    Phase 1 (current): Data collection only.
+    Logs every reward decision to decisions.jsonl so patterns can emerge over sessions.
+
+    Phase 2 (future, after 10+ sessions): Retrieve similar past decisions via event_type
+    matching and inject as 'what worked before' context — exactly MAS-on-the-Fly's
+    retrieval-augmented SOP instantiation applied to narrative reward decisions.
+
+    Log schema:
+        ts, event_type, action, reward_type, drought, arcs_active,
+        session_visible, arc_closed, response_snippet
+    """
+
+    MIN_ENTRIES_FOR_RETRIEVAL = 20  # Don't retrieve until we have enough data
+
+    def __init__(self, log_path: Path):
+        self.path = log_path
+
+    def log(self, event_type: str, action_cmd: str, reward_type: str,
+            drought: int, arcs_active: int, session_visible: int,
+            arc_closed: str = None, response_snippet: str = ''):
+        """Append a decision record."""
+        entry = {
+            'ts': datetime.now().isoformat(),
+            'event_type': event_type,
+            'action': action_cmd or 'none',
+            'reward_type': reward_type,
+            'drought': drought,
+            'arcs_active': arcs_active,
+            'session_visible': session_visible,
+            'arc_closed': arc_closed,
+            'snippet': response_snippet[:200] if response_snippet else '',
+        }
+        try:
+            with open(self.path, 'a') as f:
+                f.write(json.dumps(entry) + '\n')
+        except Exception:
+            pass
+
+    def get_recent_patterns(self, event_type: str, n: int = 3) -> str:
+        """
+        Phase 2 retrieval: fetch recent successful decisions for the same event type.
+        Returns empty string until MIN_ENTRIES_FOR_RETRIEVAL decisions are logged.
+        """
+        try:
+            if not self.path.exists():
+                return ''
+            entries = []
+            with open(self.path) as f:
+                for line in f:
+                    try:
+                        entries.append(json.loads(line.strip()))
+                    except Exception:
+                        pass
+
+            if len(entries) < self.MIN_ENTRIES_FOR_RETRIEVAL:
+                return ''   # Not enough data yet
+
+            # Filter to visible rewards for the same event type (the "successes")
+            relevant = [e for e in entries
+                        if e['reward_type'] == 'visible' and e['event_type'] == event_type]
+            if not relevant:
+                return ''
+
+            recent = relevant[-n:]
+            lines = ['=== PAST SUCCESSFUL DECISIONS (similar events) ===']
+            for e in recent:
+                arc_note = f" [closed {e['arc_closed']}]" if e.get('arc_closed') else ''
+                lines.append(f"• {e['event_type']} → {e['action']}{arc_note}")
+            lines.append('Consider what made these work and whether the current moment is similar.')
+            lines.append('=== END PAST DECISIONS ===')
+            return '\n'.join(lines)
+        except Exception:
+            return ''
+
+
 class PokemonGM:
     def __init__(self, config: dict, base_path: Path):
         self.config = config
@@ -392,7 +692,18 @@ class PokemonGM:
         # Ensure directories exist
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.memory_dir.mkdir(parents=True, exist_ok=True)
-        
+
+        # Issue #19 — Player Attribute Profiling (EXACT-inspired)
+        self.player_profile = PlayerProfileTracker(
+            profile_path=self.state_dir / 'player_profile.json',
+            species_names=self.species_names,
+        )
+
+        # Issue #20 — Decision Logger (MAS-on-the-Fly phase 1: data collection)
+        self.decision_logger = DecisionLogger(
+            log_path=self.state_dir / 'decisions.jsonl',
+        )
+
         # Load session history if persistent mode is enabled
         if self.session_persistent:
             self._load_session_history()
@@ -662,7 +973,9 @@ class PokemonGM:
     def should_invoke_agent(self, event_type: str, context: dict, threshold: float = 0.15) -> bool:
         """
         Determine if agent should be invoked for this event.
-        Threshold (default 0.4) can be lowered to invoke more frequently.
+        Threshold 0.15 (low) means most events invoke the agent — skips only very routine
+        wild battles (uncertainty 0.2 but threshold 0.15 still passes them).
+        Raise threshold toward 0.4 to be more selective.
         """
         uncertainty = self.score_event_uncertainty(event_type, context)
         return uncertainty >= threshold
@@ -982,6 +1295,19 @@ class PokemonGM:
                         self.ev_drought_count += 1
                     else:
                         self.ev_drought_count += 1
+
+                    # Issue #20 — Log decision for future pattern retrieval (MAS-on-the-Fly)
+                    final_action = action_cmds[0] if action_cmds else (action_cmd or 'none')
+                    self.decision_logger.log(
+                        event_type=event_type,
+                        action_cmd=final_action,
+                        reward_type=reward_type,
+                        drought=self.ev_drought_count,
+                        arcs_active=len(self._get_pending_arcs()),
+                        session_visible=self.session_visible_rewards,
+                        arc_closed=arc_closed_name,
+                        response_snippet=response_text[:200],
+                    )
 
                     # Execute all extracted GM calls
                     for gm_call in action_cmds:
@@ -1316,7 +1642,19 @@ class PokemonGM:
         # Session reward summary (occasional reminder of what's been given)
         if self.session_visible_rewards == 0 and len(self.reward_history) >= 5:
             prompt += "\n📊 SESSION NOTE: No visible rewards given yet this session. The player hasn't felt Maren.\n"
-        
+
+        # Issue #19 — Player Attribute Profile (EXACT-inspired inference-time personalization)
+        # Inject behavioral profile so Maren can tailor rewards to who this player actually is.
+        profile_block = self.player_profile.get_context_block()
+        if profile_block:
+            prompt += f"\n{profile_block}\n"
+
+        # Issue #20 — Decision Library retrieval (MAS-on-the-Fly, phase 2)
+        # Only activates after MIN_ENTRIES_FOR_RETRIEVAL decisions are logged.
+        past_decisions = self.decision_logger.get_recent_patterns(event_type=event_type)
+        if past_decisions:
+            prompt += f"\n{past_decisions}\n"
+
         return prompt
     
     def process_event(self, data: dict):
@@ -1421,7 +1759,15 @@ class PokemonGM:
                 self.battles_won += 1
             if avg_hp < 0.25 and outcome == 1:
                 self.close_calls += 1
-            
+
+            # Issue #19 — Update player profile
+            self.player_profile.update_battle(
+                outcome=outcome_name,
+                party=party,
+                was_close=(avg_hp < 0.25),
+                is_trainer=any(e.get('is_trainer') for e in self.battle_buffer if e.get('event') == 'START'),
+            )
+
             # Record to battle history
             battle_record = {
                 'enemy': getattr(self, 'current_enemy', 'Unknown'),
@@ -1513,6 +1859,8 @@ class PokemonGM:
             species = data.get('species', 0)
             pokemon_name = self.get_species_name(species)
             self.pokemon_caught += 1
+            # Issue #19 — Update player profile
+            self.player_profile.update_caught(species_id=species, species_name=pokemon_name)
             print(f"\n  {C.BOLD}{C.MAGENTA}{'◆' * 30}{C.RESET}")
             print(f"  {C.BOLD}{C.MAGENTA}◆  CAUGHT: {pokemon_name}!  ◆{C.RESET}")
             print(f"  {C.BOLD}{C.MAGENTA}{'◆' * 30}{C.RESET}\n")
@@ -1520,13 +1868,15 @@ class PokemonGM:
                 'state': data,
                 'caught_species': species
             })
-        
+
         elif event_type == 'move_mastery':
             C = Colors
             move_id = data.get('moveId', 0)
             count = data.get('count', 0)
             move_name = MOVE_NAMES.get(move_id, f"Move #{move_id}")
             self.move_usage[move_id] = count
+            # Issue #19 — Update player profile
+            self.player_profile.update_move_mastery(move_id=move_id, count=count, move_name=move_name)
             self.log(f"{C.YELLOW}★ MASTERY{C.RESET}  {C.WHITE}{C.BOLD}{move_name}{C.RESET} used {count}x")
             self.prompt_agent_async('MOVE_MASTERY', {
                 'state': data,

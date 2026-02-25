@@ -26,7 +26,23 @@ venv/
 .DS_Store
 Thumbs.db
 
-# PM agent workspace (local only — state files excluded, docs tracked)
-pm/*
-!pm/BACKLOG.md
-!pm/DECISIONS.md
+# PM agent workspace (local only — BACKLOG + DECISIONS tracked, rest excluded)
+pm/memory/
+pm/*.txt
+pm/ACTION_ITEMS.txt
+pm/CHANGES.txt
+pm/STANDUP.txt
+pm/SUMMARY.txt
+pm/DAILY_REPORT*.md
+pm/SESSION_SUMMARY.md
+pm/SHIP_SUMMARY.md
+pm/SHIP_PLAN.md
+pm/STATUS.md
+pm/HEARTBEAT.md
+pm/SOUL.md
+pm/IDENTITY.md
+pm/USER.md
+pm/TOOLS.md
+pm/AGENTS.md
+pm/MEMORY.md
+pm/README.md
