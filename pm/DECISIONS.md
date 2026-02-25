@@ -295,3 +295,71 @@ Full path: `/home/ayaan/projects/agentic-emerald/daemon/agentic_emerald.py`
 - maya_gm.py can be archived or deleted
 
 **Unlocks:** Issue #12 (first-run UX / one-command setup) can now proceed with clear entry point.
+
+---
+
+## 🔄 Work Log (2026-02-25)
+
+### Shipped: Player Attribute Profiling (#19) + Decision Logging (#20)
+**Commit:** f8a4691
+**Research alignment:** EXACT (2602.17695) + MAS-on-the-Fly (2602.13671) + MAS-FIRE (2602.19843)
+
+#### Issue #19 — Player Attribute Profiling (EXACT-inspired)
+New `PlayerProfileTracker` class in daemon. Observes player behavior and distills it into
+explicit attributes injected as structured context into every Maren prompt.
+
+**Attributes tracked:**
+- `ace_pokemon` — which Pokemon they trust most (battles led + won)
+- `trusted_partners` — secondary Pokemon in their roster
+- `playstyle` — inferred from battle/catch/close-call ratios
+- `risk_tolerance` — close-call rate (0=cautious, 1=reckless)
+- `ace_consistency` — how loyal they are to one lead
+- `comeback_ratio` — win rate after a loss
+- `type_specialization` — dominant type if 40%+ of exposure skews one way
+- `move_mastery` — signature move by usage count
+
+**Profile seeded from PLAYTHROUGH.md** (Combusken ace, Fire trainer identity, 4 comebacks).
+Lives at `agent/state/player_profile.json`. Auto-updates on gameplay events.
+
+**Prompt injection example:**
+```
+=== PLAYER PROFILE ===
+Ace: Combusken — led 18 battles, won 15
+Trusted partners: Ralts (12), Taillow (8), Lombre (6)
+Playstyle: resilient_grinder
+Comeback player: yes (4 wins after losses)
+Type identity: Fire trainer
+Signature move: Double Kick (used 22x)
+Career: 38 battles | 5 caught | 11 clutch moments
+=== END PLAYER PROFILE ===
+```
+
+#### Issue #20 — Decision Logger (MAS-on-the-Fly phase 1)
+New `DecisionLogger` class. Logs every Maren reward decision to `agent/state/decisions.jsonl`.
+
+**Phase 1 (now):** Pure data collection.
+**Phase 2 (auto-activates at 20+ entries):** Retrieval layer — injects top N visible-reward
+decisions for the same event type as "what worked before" context.
+
+**Log schema:** `{ts, event_type, action, reward_type, drought, arcs_active, arc_closed, snippet}`
+
+This closes the loop on Maren's decisions: she'll eventually see patterns in her own history.
+Inspired by MAS-on-the-Fly's retrieval-augmented SOP instantiation.
+
+#### New Issue Created
+- **#21** — Context-relevant PLAYTHROUGH.md injection (quality > quantity)
+  - From Feb 24 digest: "How Retrieved Context Shapes Internal Representations" (arxiv 2602.20091)
+  - Current: injects last 3000 chars regardless of relevance
+  - Fix: filter by event type — badge events get badge history, catches get catch history
+  - Expected: 40-60% token reduction + higher quality context
+  - Priority: MEDIUM
+
+### Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Session history compression** (#14) — MEDIUM priority
+4. **Context-relevant PLAYTHROUGH.md injection** (#21) — MEDIUM priority
+
+---
+
+**Last Updated:** 2026-02-25 (3:30 AM)

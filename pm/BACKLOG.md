@@ -572,3 +572,77 @@ warm layer can follow if prompt size becomes an issue).
 Last updated: 2026-02-24 (3:30 AM)
 Session duration: ~35 min
 Research: EXACT + MAS-on-the-Fly → 2 new issues | Bug fix + 2 issues shipped and closed
+
+---
+
+## Daily Standup — 2026-02-25, 3:15 AM
+
+### ✅ Completed Today
+
+#### Player Attribute Profiling (#19) — SHIPPED & CLOSED
+
+**Research:** EXACT (arxiv 2602.17695) — inference-time personalization via explicit user attributes
+
+**Problem:** Maren had no model of who the player actually is as a trainer. Every event got generic narrative context. The player profile data was all there in the game events but never synthesized into structured Maren context.
+
+**What shipped:**
+- [x] `PlayerProfileTracker` class — observes gameplay signals, writes `player_profile.json`
+- [x] Tracks: ace_pokemon, trusted_partners, playstyle, risk_tolerance, ace_consistency, comeback_ratio, type_specialization, move_mastery
+- [x] Updates on: battle_end → update ace/close-call tracking; pokemon_caught → catch count; move_mastery → signature move
+- [x] Seeded from PLAYTHROUGH.md (Combusken ace at 18 battles, Fire trainer, 4 comebacks, Blaze Kick goal)
+- [x] Injected as `=== PLAYER PROFILE ===` block in every Maren prompt
+- [x] Smart injection: skips if fewer than 3 battles (avoids noise on new sessions)
+- [x] Commit: f8a4691 | Issue closed: #19
+
+**Impact:** Maren now knows Ayaan is a resilient, comeback-oriented Fire trainer who trusts Combusken above all else. This will inform narrative framing and reward choices without any additional configuration.
+
+#### Decision Logging (#20) — SHIPPED & CLOSED (Phase 1)
+
+**Research:** MAS-on-the-Fly (arxiv 2602.13671) — retrieval-augmented SOPs from past successes
+
+**What shipped:**
+- [x] `DecisionLogger` class — appends decision records to `agent/state/decisions.jsonl`
+- [x] Schema: ts, event_type, action, reward_type, drought, arcs_active, arc_closed, snippet
+- [x] Phase 2 retrieval pre-built: auto-activates at 20+ entries for same event_type
+- [x] Injected as `=== PAST SUCCESSFUL DECISIONS ===` block when sufficient data
+- [x] Commit: f8a4691 | Issue closed: #20
+
+**Impact:** After 3-4 gameplay sessions, Maren will start seeing patterns in her own decisions. "Last time I had a BATTLE_SUMMARY with drought=4, I taught Combusken a move and it was a visible win." That's the closed-loop the MAS-FIRE paper recommends.
+
+### 📋 New Issues Created
+
+- **#21** — Context-relevant PLAYTHROUGH.md injection (quality > quantity)
+  - From Feb 24 research: injecting irrelevant context harms performance (arxiv 2602.20091)
+  - Fix: filter cold-layer narrative by event type instead of last 3000 chars
+  - Priority: MEDIUM | Effort: 3-4 hours
+
+### 📊 Research Applied (Feb 23-24 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| EXACT | 2602.17695 | Player attribute profiling (#19) |
+| MAS-on-the-Fly | 2602.13671 | Decision library (#20) |
+| MAS-FIRE | 2602.19843 | Closed-loop design rationale for #20 |
+| RAG context quality | 2602.20091 | New issue #21 |
+
+### 📊 Metrics
+- **Commits shipped:** 1 (f8a4691)
+- **Code changes:** +375 lines / -9 lines
+- **Issues closed:** 2 (#19, #20)
+- **Issues created:** 1 (#21)
+- **New classes:** 2 (PlayerProfileTracker, DecisionLogger)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Session history compression** (#14) — MEDIUM priority
+4. **Context-relevant PLAYTHROUGH.md injection** (#21) — MEDIUM priority, new today
+
+---
+
+Last updated: 2026-02-25 (3:30 AM EST)
+Session duration: ~45 min
+Research: EXACT + MAS-on-the-Fly + MAS-FIRE → 2 features shipped, 1 new issue
