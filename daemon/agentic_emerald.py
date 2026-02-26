@@ -1111,6 +1111,124 @@ class PokemonGM:
 
         return pending[:5]
 
+    def _get_relevant_narrative(self, event_type: str, max_chars: int = 1500) -> str:
+        """
+        Issue #21 — Context-relevant PLAYTHROUGH.md injection (quality > quantity).
+
+        Research (arxiv 2602.20091): Irrelevant retrieved context actively harms
+        LLM performance by polluting early-layer representations. Quality > quantity.
+
+        Instead of dumping last 3000 chars, filter PLAYTHROUGH.md by event type:
+        - BATTLE_SUMMARY → battle sections, whiteouts, rematches, poison arcs
+        - BADGE_OBTAINED → badge/gym sections, milestone victories
+        - POKEMON_CAUGHT → catch/evolution/team sections
+        - MOVE_MASTERY → move learning, evolution, signature move sections
+        - GRIND_SUMMARY → minimal (arc ledger provides hot context)
+
+        Returns: filtered narrative text up to max_chars, or empty string.
+        """
+        playthrough = self.agent_memory_dir / 'PLAYTHROUGH.md'
+        if not playthrough.exists():
+            return ''
+
+        try:
+            text = playthrough.read_text()
+
+            # Find the end of the ARC LEDGER section (skip the machine-readable table).
+            # ARC LEDGER is at the TOP of the file; narrative content comes AFTER.
+            # Look for the next ## header after ARC LEDGER, or the first --- separator.
+            import re
+            narrative_start = 0
+            if '## ARC LEDGER' in text:
+                ledger_idx = text.index('## ARC LEDGER')
+                # Find the next ## header after ARC LEDGER (the narrative sections)
+                rest = text[ledger_idx + 15:]  # Skip past "## ARC LEDGER" header
+                next_section = re.search(r'\n## [^A]', rest)  # Next ## that's not ARC
+                if next_section:
+                    narrative_start = ledger_idx + 15 + next_section.start()
+                else:
+                    # Fallback: look for --- separator
+                    sep_match = re.search(r'\n---\n', rest)
+                    if sep_match:
+                        narrative_start = ledger_idx + 15 + sep_match.end()
+
+            text = text[narrative_start:].strip()
+            if not text:
+                return ''
+
+            # Define relevance keywords per event type
+            EVENT_KEYWORDS = {
+                'BATTLE_SUMMARY': [
+                    'battle', 'fight', 'fainted', 'whiteout', 'rematch',
+                    'swept', 'crit', 'close call', 'poison', 'paralysis',
+                    'KO', 'OHKO', 'victory', 'defeat', 'gym', 'trainer',
+                    'Double Kick', 'Combusken', 'closer', 'clutch'
+                ],
+                'BADGE_OBTAINED': [
+                    'badge', 'gym', 'leader', 'roxanne', 'brawly', 'wattson',
+                    'flannery', 'norman', 'winona', 'tate', 'liza', 'wallace',
+                    'milestone', 'victory', 'earned', 'dynamo', 'stone', 'knuckle'
+                ],
+                'POKEMON_CAUGHT': [
+                    'caught', 'catch', 'evolve', 'evolution', 'team snapshot',
+                    'party', 'shiny', 'rare', 'lotad', 'ralts', 'combusken',
+                    'kirlia', 'lombre', 'nincada', 'taillow'
+                ],
+                'MOVE_MASTERY': [
+                    'learned', 'move', 'mastery', 'signature', 'replaced',
+                    'double kick', 'blaze kick', 'bulk up', 'confusion',
+                    'absorb', 'giga drain', 'peck', 'wing attack'
+                ],
+                'TRAINER_REMATCH': [
+                    'rematch', 'rival', 'may', 'wally', 'return', 'revenge',
+                    'comeback', 'wall', 'second attempt', 'went back'
+                ],
+            }
+
+            # GRIND_SUMMARY gets minimal context (arc ledger is enough)
+            if event_type == 'GRIND_SUMMARY':
+                return ''
+
+            keywords = EVENT_KEYWORDS.get(event_type, EVENT_KEYWORDS['BATTLE_SUMMARY'])
+            keywords_lower = [k.lower() for k in keywords]
+
+            # Split into sections by ## headers
+            sections = re.split(r'\n(?=## )', text)
+
+            # Score and rank sections by relevance
+            scored_sections = []
+            for section in sections:
+                if len(section.strip()) < 50:  # Skip tiny sections
+                    continue
+                section_lower = section.lower()
+                score = sum(1 for kw in keywords_lower if kw in section_lower)
+                if score > 0:
+                    scored_sections.append((score, section.strip()))
+
+            # Sort by score (highest first) and take best matches
+            scored_sections.sort(key=lambda x: x[0], reverse=True)
+
+            # Build result up to max_chars
+            result_parts = []
+            total_chars = 0
+            for score, section in scored_sections:
+                if total_chars + len(section) > max_chars:
+                    # Try to fit a truncated version
+                    remaining = max_chars - total_chars
+                    if remaining > 200:
+                        result_parts.append(section[:remaining] + '...')
+                    break
+                result_parts.append(section)
+                total_chars += len(section) + 2  # +2 for newlines
+
+            if not result_parts:
+                return ''
+
+            return '\n\n'.join(result_parts)
+
+        except Exception:
+            return ''
+
     def _close_arc(self, arc_name: str) -> bool:
         """
         Close a delivered arc in the ARC LEDGER within PLAYTHROUGH.md.
@@ -1596,29 +1714,22 @@ class PokemonGM:
         # WARM layer — recent narrative summary, injected on significant events.
         # COLD layer — full PLAYTHROUGH.md narrative, injected only on major beats.
         #
-        # Major events (badge, rematch) get the full cold narrative so Maren can
-        # write a meaningful story beat. Routine events get only hot+warm to
-        # keep prompts lean and fast.
+        # Issue #21 (Context-relevant injection, arxiv 2602.20091):
+        # Quality > quantity. Irrelevant context harms performance.
+        # Instead of dumping last 3000 chars, filter by event type.
+        # Major events get more context (2000 chars), routine events get less (1000 chars).
         MAJOR_EVENTS = ('BADGE_OBTAINED', 'TRAINER_REMATCH')
         is_major = event_type in MAJOR_EVENTS
 
-        # COLD layer — full recent narrative context on major events
-        if is_major:
-            playthrough = self.agent_memory_dir / 'PLAYTHROUGH.md'
-            if playthrough.exists():
-                try:
-                    full_text = playthrough.read_text()
-                    # Inject only the narrative sections (skip the ARC LEDGER table
-                    # to avoid duplication — arcs are injected as hot layer below).
-                    # Take last 3000 chars of narrative to keep prompt bounded.
-                    narrative_only = full_text
-                    if '## ARC LEDGER' in full_text:
-                        narrative_only = full_text[:full_text.index('## ARC LEDGER')]
-                    tail = narrative_only[-3000:] if len(narrative_only) > 3000 else narrative_only
-                    if tail.strip():
-                        prompt += f"\n=== NARRATIVE HISTORY (major event — full context) ===\n{tail}\n"
-                except Exception:
-                    pass
+        # COLD layer — context-relevant narrative filtered by event type
+        # Major events get 2000 chars, routine battle/catch events get 1000 chars
+        # GRIND_SUMMARY gets minimal context (arc ledger is enough)
+        if event_type != 'GRIND_SUMMARY':
+            max_chars = 2000 if is_major else 1000
+            relevant_narrative = self._get_relevant_narrative(event_type, max_chars=max_chars)
+            if relevant_narrative:
+                label = "major event — full context" if is_major else "filtered by event type"
+                prompt += f"\n=== NARRATIVE HISTORY ({label}) ===\n{relevant_narrative}\n"
 
         # HOT layer — Inject pending arc payoffs (things Maren has promised in PLAYTHROUGH.md)
         pending_arcs = self._get_pending_arcs()
