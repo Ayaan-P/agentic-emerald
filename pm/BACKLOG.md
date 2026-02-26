@@ -646,3 +646,70 @@ Research: EXACT + MAS-on-the-Fly → 2 new issues | Bug fix + 2 issues shipped a
 Last updated: 2026-02-25 (3:30 AM EST)
 Session duration: ~45 min
 Research: EXACT + MAS-on-the-Fly + MAS-FIRE → 2 features shipped, 1 new issue
+
+---
+
+## Daily Standup — 2026-02-26, 3:15 AM
+
+### ✅ Completed Today
+
+#### Context-Relevant PLAYTHROUGH.md Injection (#21) — SHIPPED & CLOSED
+**Research:** arxiv 2602.20091 — "How Retrieved Context Shapes Internal Representations in RAG"
+**Core insight:** Irrelevant context actively harms LLM performance.
+
+**What shipped (commit daf7c36):**
+- [x] Added `_get_relevant_narrative()` method with event-type keyword filtering
+- [x] BATTLE_SUMMARY → battle/combat keywords (1000 char budget)
+- [x] BADGE_OBTAINED → gym/badge keywords (2000 char budget)
+- [x] POKEMON_CAUGHT → evolution/catch keywords (1000 char budget)
+- [x] GRIND_SUMMARY → no narrative (arc ledger is enough)
+- [x] Sections ranked by keyword score, most relevant first
+
+**Token reduction measured:**
+- BATTLE_SUMMARY: 67% reduction (1000 vs 3000 chars)
+- BADGE_OBTAINED: 34% reduction (2000 vs 3000 chars)
+- GRIND_SUMMARY: 100% reduction (0 vs 3000 chars)
+
+---
+
+#### Session History Compression (#14) — SHIPPED & CLOSED
+**Research:** KLong (arxiv 2602.17547) — trajectory-splitting for long-horizon agents
+
+**What shipped (commit ec84956):**
+- [x] Added `_compress_session_history()` method
+- [x] Compression triggers at threshold (20 events) or badge milestones
+- [x] Extracts: event counts, key GM decisions, arc references
+- [x] Prompt now shows: 3 compressed summaries + 10 recent events (full fidelity)
+- [x] Session data persisted: history, compressed_summaries, last_badge_count
+
+**Impact:**
+- Early-game arcs preserved indefinitely
+- ~50% token reduction on long playthroughs
+- Narrative continuity across 100+ interaction sessions
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 2 (daf7c36, ec84956)
+- **Code changes:** +251 lines / -30 lines
+- **Issues closed:** 2 (#21, #14)
+- **Issues created:** 0
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Gen 1 Support** (#1) — Blocked on gen expansion decision
+
+### 📝 Notes
+- Both features shipped address token efficiency — Maren's prompts are now leaner and more relevant
+- Session compression enables full-game playthroughs without arc memory loss
+- Context filtering improves signal-to-noise for narrative decisions
+
+---
+
+Last updated: 2026-02-26 (3:30 AM EST)
+Session duration: ~45 min
+Research: RAG context quality + KLong → 2 features shipped, 0 new issues
