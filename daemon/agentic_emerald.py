@@ -652,6 +652,9 @@ class PokemonGM:
         self.session_file = base_path / session_config.get('session_file', './state/session_id.txt')
         self.session_history_file = self.state_dir / 'session.json'
         self.session_history = []
+        self.compressed_summaries = []  # Issue #14: KLong-inspired compressed history
+        self.COMPRESSION_THRESHOLD = 20  # Compress when history reaches this size
+        self.last_badge_count = 0  # Track badge milestones for compression triggers
         
         # Runtime state
         self.sock = None
@@ -735,10 +738,14 @@ class PokemonGM:
                 with open(self.session_history_file) as f:
                     data = json.load(f)
                     self.session_history = data.get('history', [])
-                    self.log(f"📜 Loaded {len(self.session_history)} previous session events")
+                    self.compressed_summaries = data.get('compressed_summaries', [])
+                    self.last_badge_count = data.get('last_badge_count', 0)
+                    total = len(self.session_history) + len(self.compressed_summaries)
+                    self.log(f"📜 Loaded {len(self.session_history)} events + {len(self.compressed_summaries)} summaries")
             except Exception as e:
                 self.log(f"⚠️ Failed to load session history: {e}")
                 self.session_history = []
+                self.compressed_summaries = []
         else:
             self.log("📝 Starting new session")
     
@@ -749,6 +756,8 @@ class PokemonGM:
                 session_data = {
                     'started_at': datetime.fromtimestamp(self.session_start).isoformat(),
                     'history': self.session_history,
+                    'compressed_summaries': self.compressed_summaries,
+                    'last_badge_count': self.last_badge_count,
                     'stats': {
                         'battles_won': self.battles_won,
                         'pokemon_caught': self.pokemon_caught,
@@ -759,6 +768,80 @@ class PokemonGM:
                     json.dump(session_data, f, indent=2)
             except Exception as e:
                 self.log(f"⚠️ Failed to save session history: {e}")
+
+    def _compress_session_history(self, trigger: str = 'threshold'):
+        """
+        Issue #14 — Session history compression (KLong-inspired, arxiv 2602.17547).
+
+        Compresses the oldest half of session history into a structured summary.
+        Triggered when history exceeds COMPRESSION_THRESHOLD or at badge milestones.
+
+        This ensures important early-game arcs aren't lost in long playthroughs
+        while keeping recent history at full fidelity for immediate context.
+        """
+        if len(self.session_history) < self.COMPRESSION_THRESHOLD:
+            return  # Not enough history to compress
+
+        # Take the oldest half of history
+        split_point = len(self.session_history) // 2
+        old_history = self.session_history[:split_point]
+        self.session_history = self.session_history[split_point:]
+
+        # Extract key events and patterns from old history
+        event_types = {}
+        key_decisions = []
+        visible_rewards = []
+        arcs_mentioned = set()
+
+        for entry in old_history:
+            # Count event types
+            etype = entry.get('event_type', 'unknown')
+            event_types[etype] = event_types.get(etype, 0) + 1
+
+            # Extract key decisions from responses
+            response = entry.get('response', '')
+            if 'ACTION:' in response:
+                action_line = [l for l in response.split('\n') if 'ACTION:' in l]
+                if action_line:
+                    action = action_line[0].split('ACTION:')[1].strip()[:80]
+                    if action.lower() != 'none' and 'GM.' in action:
+                        key_decisions.append(action)
+
+            # Look for arc mentions
+            for arc_word in ['Ralts', 'Combusken', 'Lombre', 'shiny', 'Blaze Kick', 'Giga Drain']:
+                if arc_word.lower() in response.lower():
+                    arcs_mentioned.add(arc_word)
+
+            # Track visible rewards
+            if 'teachMove' in response or 'setShiny' in response or 'giveItem' in response:
+                visible_rewards.append(etype)
+
+        # Build summary
+        summary_parts = []
+        if event_types:
+            top_events = sorted(event_types.items(), key=lambda x: -x[1])[:3]
+            summary_parts.append(f"Events: {', '.join(f'{e}({c})' for e, c in top_events)}")
+        if arcs_mentioned:
+            summary_parts.append(f"Arcs active: {', '.join(sorted(arcs_mentioned))}")
+        if key_decisions:
+            summary_parts.append(f"Key actions: {len(key_decisions)} GM interventions")
+        if visible_rewards:
+            summary_parts.append(f"Visible rewards: {len(visible_rewards)}")
+
+        compressed = {
+            'type': 'history_summary',
+            'covers': f"{len(old_history)} interactions",
+            'compressed_at': trigger,
+            'timestamp': datetime.now().isoformat(),
+            'summary': ' | '.join(summary_parts) if summary_parts else 'Routine gameplay',
+            'key_decisions': key_decisions[-5:] if key_decisions else [],
+            'arcs': list(arcs_mentioned),
+        }
+
+        self.compressed_summaries.append(compressed)
+        C = Colors
+        self.log(f"{C.CYAN}📦 COMPRESSED{C.RESET}  {len(old_history)} events → summary #{len(self.compressed_summaries)}")
+        self._save_session_history()
     
     def _add_to_session_history(self, event_type: str, agent_prompt: str, agent_response: str):
         """Record an agent interaction in session history"""
@@ -769,8 +852,13 @@ class PokemonGM:
                 'prompt': agent_prompt,
                 'response': agent_response
             })
-            # Save after each interaction
-            self._save_session_history()
+            
+            # Issue #14: Trigger compression if history exceeds threshold
+            if len(self.session_history) >= self.COMPRESSION_THRESHOLD:
+                self._compress_session_history(trigger='threshold')
+            else:
+                # Save after each interaction
+                self._save_session_history()
     
     def log(self, msg: str):
         ts = datetime.now().strftime("%H:%M:%S")
@@ -1699,13 +1787,25 @@ class PokemonGM:
             # Clear after including
             self.skipped_events = []
         
-        # Add session history context if available
-        if self.session_persistent and self.session_history:
-            prompt += f"\n=== SESSION HISTORY ({len(self.session_history)} previous events) ===\n"
-            # Include last 10 interactions for better continuity
-            for entry in self.session_history[-10:]:
-                prompt += f"• [{entry.get('event_type', 'unknown')}] {entry.get('response', '')[:200]}\n"
-            prompt += "\nYou've seen these events before. Build on this context, don't repeat yourself.\n"
+        # Add session history context if available (Issue #14: KLong-inspired compression)
+        if self.session_persistent:
+            # Inject compressed summaries first (older history)
+            if self.compressed_summaries:
+                prompt += f"\n=== COMPRESSED HISTORY ({len(self.compressed_summaries)} summaries) ===\n"
+                for i, summary in enumerate(self.compressed_summaries[-3:], 1):  # Last 3 summaries
+                    prompt += f"[Summary {i}] {summary.get('covers', '?')} | {summary.get('summary', '')}\n"
+                    if summary.get('key_decisions'):
+                        prompt += f"  Key actions: {', '.join(summary['key_decisions'][:3])}\n"
+                    if summary.get('arcs'):
+                        prompt += f"  Arcs: {', '.join(summary['arcs'])}\n"
+
+            # Then inject recent full-fidelity history
+            if self.session_history:
+                recent_count = min(10, len(self.session_history))
+                prompt += f"\n=== RECENT HISTORY ({recent_count} of {len(self.session_history)} events, full fidelity) ===\n"
+                for entry in self.session_history[-10:]:
+                    prompt += f"• [{entry.get('event_type', 'unknown')}] {entry.get('response', '')[:200]}\n"
+                prompt += "\nYou've seen these events before. Build on this context, don't repeat yourself.\n"
         
         # === MAREN IMPACT SYSTEM ===
 
@@ -1936,6 +2036,16 @@ class PokemonGM:
             print(f"\n  {C.BOLD}{C.YELLOW}{'★' * 40}{C.RESET}")
             print(f"  {C.BOLD}{C.YELLOW}★  BADGE OBTAINED!  ★  Total: {badge_count}  ★{C.RESET}")
             print(f"  {C.BOLD}{C.YELLOW}{'★' * 40}{C.RESET}\n")
+
+            # Issue #14: Compress session history at badge milestones
+            try:
+                badge_int = int(badge_count) if isinstance(badge_count, str) else badge_count
+                if badge_int > self.last_badge_count and len(self.session_history) >= 10:
+                    self._compress_session_history(trigger=f'badge_{badge_int}')
+                    self.last_badge_count = badge_int
+            except (ValueError, TypeError):
+                pass
+
             self.prompt_agent_async('BADGE_OBTAINED', {'state': data})
         
         elif event_type == 'party_changed':
