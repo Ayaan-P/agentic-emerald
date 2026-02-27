@@ -742,6 +742,24 @@ class PokemonGM:
                     self.last_badge_count = data.get('last_badge_count', 0)
                     total = len(self.session_history) + len(self.compressed_summaries)
                     self.log(f"📜 Loaded {len(self.session_history)} events + {len(self.compressed_summaries)} summaries")
+
+                    # Startup compression: handle large legacy sessions that were never compressed.
+                    # If session has accumulated many events before compression was implemented,
+                    # compress now in multiple passes until below threshold.
+                    if len(self.session_history) >= self.COMPRESSION_THRESHOLD * 2:
+                        original_count = len(self.session_history)
+                        passes = 0
+                        while len(self.session_history) >= self.COMPRESSION_THRESHOLD * 2:
+                            self._compress_session_history(trigger='startup')
+                            passes += 1
+                            if passes > 20:  # Safety limit
+                                break
+                        C = Colors
+                        self.log(
+                            f"{C.CYAN}📦 STARTUP COMPRESS{C.RESET}  "
+                            f"{original_count} → {len(self.session_history)} events "
+                            f"({len(self.compressed_summaries)} summaries, {passes} passes)"
+                        )
             except Exception as e:
                 self.log(f"⚠️ Failed to load session history: {e}")
                 self.session_history = []
