@@ -460,4 +460,84 @@ Prompt now shows:
 
 ---
 
-**Last Updated:** 2026-02-26 (3:30 AM EST)
+## 🔄 Work Log (2026-02-27)
+
+### Shipped: Startup Compression for Legacy Sessions
+**Commit:** 5eb7e0f
+**Research alignment:** KLong trajectory-splitting (arxiv 2602.17547)
+
+#### Problem Discovered
+Session history (#14) compression only triggered when NEW events were added. Legacy sessions
+accumulated before the feature existed (e.g., 1974 events from Feb 16-24) would never compress,
+leading to:
+- 6MB+ session.json files
+- Bloated prompt context when session history was injected
+- Effectively negating the compression benefit for existing users
+
+#### Solution: Startup Compression Check
+Modified `_load_session_history()` to run multiple compression passes on load if history
+exceeds 2x the compression threshold:
+
+```python
+if len(self.session_history) >= self.COMPRESSION_THRESHOLD * 2:
+    while len(self.session_history) >= self.COMPRESSION_THRESHOLD * 2:
+        self._compress_session_history(trigger='startup')
+```
+
+#### Impact
+- **Before:** 1974 events stay uncompressed forever
+- **After:** On next daemon start, compresses to ~20 events + summaries
+- Existing users get immediate benefit without losing arc history
+
+---
+
+### New Issue Created (#22)
+**feat: State-machine narrative tiers (Dynamic Personality Adaptation)**
+- From Feb 26 digest: arxiv 2602.22157 (Dynamic Personality Adaptation via State Machines)
+- Maps to existing backlog item: "Narrative Tiers / Narrative Packs"
+- Proposal: MENTOR → COMPANION → ADVERSARY state machine based on gameplay
+- Priority: MEDIUM (polish/depth, not core)
+
+---
+
+### Observations
+
+#### decisions.jsonl Not Populated
+DecisionLogger (#20) was implemented Feb 25, but no gameplay has occurred since.
+The file doesn't exist yet. Will auto-create on first agent response when Ayaan plays next.
+
+#### Arc Ledger Parsing Verified
+Tested `_get_pending_arcs()` — correctly extracts all 3 arcs:
+- IMMEDIATE [HIGH]: Combusken / Blaze Kick
+- PENDING [HIGH]: Ralts / Shiny on evolution
+- PENDING [MEDIUM]: Lombre / Giga Drain
+
+---
+
+### Research Applied (Feb 25-26 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| KLong (trajectory splitting) | 2602.17547 | Startup compression fix |
+| Dynamic Personality Adaptation | 2602.22157 | New issue #22 (narrative tiers) |
+| SWE-Protégé | 2602.22124 | (noted for cost optimization) |
+| DySCO (retrieval heads) | 2602.22175 | (noted — requires model changes) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (5eb7e0f)
+- **Code changes:** +18 lines
+- **Issues created:** 1 (#22)
+- **Bugs fixed:** 1 (legacy session compression)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — New issue, MEDIUM priority
+
+---
+
+**Last Updated:** 2026-02-27 (3:15 AM EST)

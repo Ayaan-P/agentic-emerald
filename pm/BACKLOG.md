@@ -713,3 +713,88 @@ Research: EXACT + MAS-on-the-Fly + MAS-FIRE → 2 features shipped, 1 new issue
 Last updated: 2026-02-26 (3:30 AM EST)
 Session duration: ~45 min
 Research: RAG context quality + KLong → 2 features shipped, 0 new issues
+
+---
+
+## Daily Standup — 2026-02-27, 3:15 AM
+
+### ✅ Completed Today
+
+#### Startup Compression for Legacy Sessions — SHIPPED
+**Commit:** 5eb7e0f
+**Research:** KLong (arxiv 2602.17547) — follow-up fix to #14
+
+**Problem discovered:** Session compression (#14) only triggered when NEW events were added.
+Existing sessions with 1974 events from before the feature never compressed → 6MB session.json.
+
+**What shipped:**
+- [x] Added startup compression check to `_load_session_history()`
+- [x] If history exceeds 2x threshold, run compression passes until below 2x
+- [x] Safety limit of 20 passes to prevent infinite loops
+- [x] Logs compression summary on startup
+
+**Impact:**
+- Existing users with large sessions get immediate benefit on next daemon start
+- No manual intervention required
+- Arc history preserved via compression summaries
+
+---
+
+#### New Issue Created: #22 — State-Machine Narrative Tiers
+**Research:** Dynamic Personality Adaptation (arxiv 2602.22157)
+
+**Proposal:** Implement state-machine-driven narrative tiers:
+- MENTOR → COMPANION → ADVERSARY → TRICKSTER
+- State transitions based on gameplay (wins, losses, battles)
+- Different Maren personalities per tier
+
+**Priority:** MEDIUM (polish/depth, not core)
+
+---
+
+### 📊 Observations
+
+#### decisions.jsonl Status
+The DecisionLogger (#20) file doesn't exist yet — no gameplay since feature shipped.
+Will auto-create on first agent response when Ayaan plays next.
+Code verified: logging path is correct, will work when invoked.
+
+#### Arc Ledger Verification
+Tested `_get_pending_arcs()` — all 3 arcs extracted correctly:
+- IMMEDIATE [HIGH]: Combusken / Blaze Kick
+- PENDING [HIGH]: Ralts / Shiny on evolution
+- PENDING [MEDIUM]: Lombre / Giga Drain
+
+---
+
+### 📊 Research Applied (Feb 25-26 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| KLong (trajectory splitting) | 2602.17547 | Startup compression fix |
+| Dynamic Personality Adaptation | 2602.22157 | New issue #22 |
+| SWE-Protégé | 2602.22124 | Noted for future cost optimization |
+| DySCO (retrieval heads) | 2602.22175 | Noted — requires model-level changes |
+| Skill-Inject security | 2602.20156 | Noted for Clawdbot skill security |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (5eb7e0f)
+- **Code changes:** +18 lines
+- **Issues created:** 1 (#22)
+- **Bugs fixed:** 1 (legacy session compression)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — New issue, MEDIUM priority
+
+---
+
+Last updated: 2026-02-27 (3:15 AM EST)
+Session duration: ~30 min
+Research: KLong follow-up + Dynamic Personality → 1 fix shipped, 1 new issue
