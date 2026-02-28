@@ -278,6 +278,48 @@ class Colors:
     WHITE = "\033[97m"
 
 
+class LearningDirectives:
+    """
+    Issue #23 — Controllable Learning Focus ("Tell Me What To Learn", arxiv 2602.23201).
+
+    Allows configuration of what patterns Maren should prioritize learning from.
+    Instead of treating all gameplay signals equally, the user can specify
+    natural language directives that guide Maren's attention.
+
+    Example directives:
+        - "Track momentum shifts — when player goes from losing streak to winning"
+        - "Notice Pokemon that get benched and brought back — loyalty under pressure"
+        - "Pay attention to type specialization — are they becoming a Fire trainer?"
+
+    Directives are injected into every Maren prompt as structured guidance,
+    making her observations more intentional and personalized.
+    """
+
+    DEFAULT_DIRECTIVES = [
+        "Track ace Pokemon — who leads most battles? Who closes them?",
+        "Notice comeback patterns — wins after losses show resilience",
+        "Watch for type specialization — is a trainer identity forming?",
+        "Observe loyalty signals — benched Pokemon brought back under pressure",
+    ]
+
+    def __init__(self, directives: list = None):
+        self.directives = directives if directives else self.DEFAULT_DIRECTIVES
+
+    def get_context_block(self) -> str:
+        """Format directives as a prompt block for injection."""
+        if not self.directives:
+            return ''
+
+        lines = ['=== LEARNING FOCUS (what to pay attention to) ===']
+        for i, directive in enumerate(self.directives[:6], 1):  # Max 6 directives
+            lines.append(f"{i}. {directive}")
+        lines.append('')
+        lines.append('When observing events, prioritize patterns that match these directives.')
+        lines.append('Let these guide what you notice, remember, and reward.')
+        lines.append('=== END LEARNING FOCUS ===')
+        return '\n'.join(lines)
+
+
 class PlayerProfileTracker:
     """
     Issue #19 — Explicit Player Attribute Profiling (EXACT-inspired, arxiv 2602.17695).
@@ -706,6 +748,13 @@ class PokemonGM:
         self.decision_logger = DecisionLogger(
             log_path=self.state_dir / 'decisions.jsonl',
         )
+
+        # Issue #23 — Learning Directives ("Tell Me What To Learn", arxiv 2602.23201)
+        narrative_config = config.get('narrative', {})
+        custom_directives = narrative_config.get('learning_directives', None)
+        self.learning_directives = LearningDirectives(directives=custom_directives)
+        if custom_directives:
+            self.log(f"📚 Loaded {len(custom_directives)} custom learning directives")
 
         # Load session history if persistent mode is enabled
         if self.session_persistent:
@@ -1883,6 +1932,12 @@ class PokemonGM:
         past_decisions = self.decision_logger.get_recent_patterns(event_type=event_type)
         if past_decisions:
             prompt += f"\n{past_decisions}\n"
+
+        # Issue #23 — Learning Directives ("Tell Me What To Learn", arxiv 2602.23201)
+        # Inject configurable focus areas to guide what Maren pays attention to.
+        directives_block = self.learning_directives.get_context_block()
+        if directives_block:
+            prompt += f"\n{directives_block}\n"
 
         return prompt
     

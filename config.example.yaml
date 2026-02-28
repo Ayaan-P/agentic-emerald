@@ -50,6 +50,20 @@ session:
 #   enabled: false
 #   api_key: ""
 
+# Narrative configuration
+narrative:
+  # Learning Directives — Guide what patterns Maren pays attention to
+  # Inspired by "Tell Me What To Learn" (arxiv 2602.23201)
+  # These are natural language instructions that shape Maren's observations.
+  # If omitted, defaults are used. Customize to match your play style.
+  #
+  # learning_directives:
+  #   - "Track ace Pokemon — who leads most battles? Who closes them?"
+  #   - "Notice comeback patterns — wins after losses show resilience"
+  #   - "Watch for type specialization — is a trainer identity forming?"
+  #   - "Pay attention to close calls — clutch wins deserve recognition"
+  #   - "Observe benched-then-returned Pokemon — loyalty under pressure"
+
 # Logging
 logging:
   # Show debug output
