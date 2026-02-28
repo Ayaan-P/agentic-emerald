@@ -798,3 +798,80 @@ Tested `_get_pending_arcs()` — all 3 arcs extracted correctly:
 Last updated: 2026-02-27 (3:15 AM EST)
 Session duration: ~30 min
 Research: KLong follow-up + Dynamic Personality → 1 fix shipped, 1 new issue
+
+
+---
+
+## Daily Standup — 2026-02-28, 3:15 AM
+
+### ✅ Completed Today
+
+#### Learning Directives (#23) — SHIPPED & CLOSED
+**Research:** "Tell Me What To Learn" (arxiv 2602.23201)
+
+**Problem:** Maren treats all gameplay signals equally. No way to customize what she focuses on.
+
+**What shipped (commit e8ffa68):**
+- [x] `LearningDirectives` class with default + custom directive support
+- [x] Config option: `narrative.learning_directives` list
+- [x] Prompt injection in `build_prompt()` after player profile
+- [x] Default directives: ace tracking, comebacks, type specialization, loyalty
+
+**Config example:**
+```yaml
+narrative:
+  learning_directives:
+    - "Track ace Pokemon — who leads most battles?"
+    - "Notice comeback patterns — wins after losses"
+```
+
+**Impact:**
+- Users can customize what patterns Maren prioritizes
+- Defaults work well for most play styles
+- Research-backed: selective learning > equal-weight learning
+
+---
+
+### 📊 Observations
+
+#### Session Compression Pending
+session.json has 1974 events (6MB). Startup compression (5eb7e0f) ready to run
+on next daemon restart. Will compress to ~20 events + summaries automatically.
+
+#### Arc Ledger Still Active
+3 arcs pending payoff — unchanged since Feb 24:
+- IMMEDIATE: Combusken / Blaze Kick
+- PENDING: Ralts / Shiny on evolution
+- PENDING: Lombre / Giga Drain
+
+---
+
+### 📊 Research Applied (Feb 26-27 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| Tell Me What To Learn | 2602.23201 | Learning Directives (#23) — SHIPPED |
+| ParamMem | 2602.23320 | Noted (parametric reflection) |
+| AgentDropoutV2 | 2602.23258 | Noted (error propagation prevention) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (e8ffa68)
+- **Code changes:** +69 lines
+- **Issues created:** 1 (#23)
+- **Issues closed:** 1 (#23)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work
+3. **Narrative Tiers** (#22) — MEDIUM priority
+
+---
+
+Last updated: 2026-02-28 (3:15 AM EST)
+Session duration: ~35 min
+Research: "Tell Me What To Learn" → 1 feature shipped
+

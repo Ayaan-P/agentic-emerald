@@ -540,4 +540,80 @@ Tested `_get_pending_arcs()` — correctly extracts all 3 arcs:
 
 ---
 
-**Last Updated:** 2026-02-27 (3:15 AM EST)
+## 🔄 Work Log (2026-02-28)
+
+### Shipped: Learning Directives (#23)
+**Commit:** e8ffa68
+**Research alignment:** "Tell Me What To Learn" (arxiv 2602.23201)
+
+#### Problem
+Maren treats all gameplay signals equally. No way to customize what patterns she prioritizes.
+Different players care about different things — type specialization, underdog stories, comebacks.
+
+#### Solution: Configurable Learning Directives
+Natural language instructions that guide what Maren pays attention to.
+
+```yaml
+narrative:
+  learning_directives:
+    - "Track ace Pokemon — who leads most battles? Who closes them?"
+    - "Notice comeback patterns — wins after losses show resilience"
+    - "Watch for type specialization — is a trainer identity forming?"
+```
+
+#### Implementation
+- `LearningDirectives` class with default + custom directive support
+- Prompt injection in `build_prompt()` after player profile
+- Config loading via `narrative.learning_directives` list
+
+#### Default Directives (if user doesn't customize)
+1. Track ace Pokemon — who leads most battles? Who closes them?
+2. Notice comeback patterns — wins after losses show resilience
+3. Watch for type specialization — is a trainer identity forming?
+4. Observe loyalty signals — benched Pokemon brought back under pressure
+
+---
+
+### Observations
+
+#### Session Compression Ready
+session.json has 1974 events (6MB) from before compression was shipped.
+On next daemon restart, startup compression will reduce to ~20 events + summaries.
+Verified: compression code is correct, just awaiting daemon restart during gameplay.
+
+#### Arc Ledger Still Active
+3 pending arcs ready for payoff:
+- IMMEDIATE [HIGH]: Combusken / Blaze Kick
+- PENDING [HIGH]: Ralts / Shiny on evolution
+- PENDING [MEDIUM]: Lombre / Giga Drain
+
+---
+
+### Research Applied (Feb 26-27 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| Tell Me What To Learn | 2602.23201 | Learning Directives (#23) — SHIPPED |
+| ParamMem | 2602.23320 | (noted — parametric reflection could enhance decision logger) |
+| AgentDropoutV2 | 2602.23258 | (noted — error propagation prevention) |
+| FlashOptim | 2602.23349 | (noted — memory-efficient training, not applicable to daemon) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (e8ffa68)
+- **Code changes:** +69 lines
+- **Issues created:** 1 (#23)
+- **Issues closed:** 1 (#23, shipped same session)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+
+---
+
+**Last Updated:** 2026-02-28 (3:15 AM EST)
