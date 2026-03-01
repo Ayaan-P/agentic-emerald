@@ -358,6 +358,7 @@ GM.setPokemonLevel(slot, level)   -- Direct level write (display only — use ad
 GM.addExperience(slot, amount)    -- Add raw EXP points
 
 -- Move teaching (moveSlot 1-4)
+-- ⚠️  CRITICAL: CHECK party[slot].moves FIRST — don't teach a move the Pokemon already knows!
 GM.teachMove(slot, moveId, moveSlot)
 -- Move IDs: Surf=57, Fly=19, Earthquake=89, Psychic=94, Thunderbolt=85, Ice Beam=59
 -- Flamethrower=53, Hyper Beam=63, Shadow Ball=247, Dragon Claw=337, Sludge Bomb=188

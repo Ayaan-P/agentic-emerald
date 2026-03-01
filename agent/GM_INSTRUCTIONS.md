@@ -96,6 +96,22 @@ GM.setPokemonLevel(slot, level)      -- Level up
 
 Use **GM.teachMove(slot, moveId, moveSlot)** to reward the player with new moves.
 
+### Check Current Moves FIRST (CRITICAL)
+**Before calling GM.teachMove, CHECK the Pokemon's current moves in the party data.**
+
+❌ **WRONG:** Call teachMove without checking → overwrites a move the Pokemon already has
+✅ **RIGHT:** Read party[slot].moves, confirm the move isn't already known, then teach
+
+**Example:** If Blaziken's moves are `[299, 233, 136, 327]` (Blaze Kick, Vital Throw, Shadow Punch, Sky Uppercut):
+- Do NOT call `GM.teachMove(2, 299, X)` — Blaziken already knows Blaze Kick!
+- Instead, pick a move the Pokemon DOESN'T know
+
+**Always ask:**
+1. What moves does this Pokemon currently know? (check party[slot].moves)
+2. Does it already know the move I want to teach?
+3. If yes → skip or pick a different reward
+4. If no → which move slot should be replaced? (pick the weakest/redundant one)
+
 ### Move Compatibility (IMPORTANT)
 **Before teaching a move, the Lua script now validates move compatibility automatically.**
 
