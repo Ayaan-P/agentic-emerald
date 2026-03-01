@@ -620,6 +620,283 @@ class DecisionLogger:
             return ''
 
 
+class RewardValidator:
+    """
+    Issue #24 — Reward Command Validation (AgentDropoutV2-inspired, arxiv 2602.23258).
+
+    The "rectify-or-reject" pattern: intercept agent outputs before they propagate.
+    Validates GM commands before execution to catch invalid parameters:
+    - Slot indices (0-5 for party)
+    - Move IDs (1-354 for Gen 3)
+    - EV stat names (HP, ATK, DEF, SPA, SPD, SPE)
+    - IV ranges (0-31)
+    - Basic syntax
+
+    Returns (is_valid, error_message, corrected_command) tuple.
+    If correctable, returns the fixed command. If not, returns None with error message.
+    """
+
+    # Valid EV stat names (case-insensitive match)
+    VALID_STATS = {'HP', 'ATK', 'DEF', 'SPA', 'SPD', 'SPE',
+                   'ATTACK', 'DEFENSE', 'SP_ATK', 'SP_DEF', 'SPEED',
+                   'SPATK', 'SPDEF'}
+
+    # Gen 3 move ID range (1-354, 0 is None)
+    MAX_MOVE_ID = 354
+
+    # Gen 3 item ID range (roughly 1-377 for held items)
+    MAX_ITEM_ID = 400
+
+    # Party slot range
+    MAX_SLOT = 5  # 0-5 = 6 Pokemon
+
+    # Move slot range
+    MAX_MOVE_SLOT = 3  # 0-3 = 4 moves
+
+    def __init__(self):
+        self.validation_log = []  # Track recent validations for debugging
+
+    def validate(self, gm_call: str) -> tuple:
+        """
+        Validate a GM command and return (is_valid, error_msg, corrected_cmd).
+
+        Returns:
+            - (True, None, gm_call) if valid
+            - (True, None, corrected) if auto-corrected
+            - (False, error_message, None) if invalid and uncorrectable
+        """
+        import re
+
+        if not gm_call or not gm_call.strip():
+            return (True, None, gm_call)  # Empty = no-op, valid
+
+        gm_call = gm_call.strip()
+
+        # Extract function name and args
+        match = re.match(r'GM\.(\w+)\(([^)]*)\)', gm_call)
+        if not match:
+            # Not a GM.func() call — might be legacy format, pass through
+            return (True, None, gm_call)
+
+        func_name = match.group(1)
+        args_str = match.group(2)
+
+        # Parse arguments (simple split, handles quoted strings minimally)
+        args = [a.strip().strip('"\'') for a in args_str.split(',') if a.strip()]
+
+        # Validate based on function
+        try:
+            if func_name == 'addEVs':
+                # addEVs(slot, stat, amount)
+                return self._validate_add_evs(gm_call, args)
+
+            elif func_name == 'teachMove':
+                # teachMove(slot, moveId, moveSlot)
+                return self._validate_teach_move(gm_call, args)
+
+            elif func_name == 'setIVs':
+                # setIVs(slot, ivTable) or setIVs(slot, stat, value)
+                return self._validate_set_ivs(gm_call, args)
+
+            elif func_name == 'giveItem':
+                # giveItem(slot, itemId)
+                return self._validate_give_item(gm_call, args)
+
+            elif func_name == 'setShiny':
+                # setShiny(slot, isShiny)
+                return self._validate_set_shiny(gm_call, args)
+
+            elif func_name == 'addExperience':
+                # addExperience(slot, amount)
+                return self._validate_add_experience(gm_call, args)
+
+            elif func_name == 'setFriendship':
+                # setFriendship(slot, value)
+                return self._validate_set_friendship(gm_call, args)
+
+            else:
+                # Unknown GM function — pass through (might be valid, we don't know)
+                return (True, None, gm_call)
+
+        except Exception as e:
+            # Validation error — reject to be safe
+            return (False, f"Validation error: {e}", None)
+
+    def _validate_slot(self, slot_str: str) -> tuple:
+        """Validate and parse a party slot (0-5)."""
+        try:
+            slot = int(slot_str)
+            if 0 <= slot <= self.MAX_SLOT:
+                return (True, slot)
+            return (False, f"Slot {slot} out of range (0-{self.MAX_SLOT})")
+        except ValueError:
+            return (False, f"Invalid slot '{slot_str}' (must be integer 0-{self.MAX_SLOT})")
+
+    def _validate_add_evs(self, gm_call: str, args: list) -> tuple:
+        """Validate GM.addEVs(slot, stat, amount)"""
+        if len(args) < 3:
+            return (False, f"addEVs requires 3 args (slot, stat, amount), got {len(args)}", None)
+
+        # Validate slot
+        slot_valid, slot_result = self._validate_slot(args[0])
+        if not slot_valid:
+            return (False, slot_result, None)
+
+        # Validate stat name
+        stat = args[1].upper().strip('"\'')
+        if stat not in self.VALID_STATS:
+            # Try to auto-correct common mistakes
+            corrections = {
+                'SPECIAL_ATTACK': 'SPA', 'SPECIAL_DEFENSE': 'SPD',
+                'SP.ATK': 'SPA', 'SP.DEF': 'SPD',
+                'SPATTACK': 'SPA', 'SPDEFENSE': 'SPD',
+            }
+            if stat in corrections:
+                corrected_stat = corrections[stat]
+                corrected_call = f"GM.addEVs({args[0]}, '{corrected_stat}', {args[2]})"
+                return (True, f"Auto-corrected stat '{stat}' → '{corrected_stat}'", corrected_call)
+            return (False, f"Invalid stat '{stat}'. Valid: HP, ATK, DEF, SPA, SPD, SPE", None)
+
+        # Validate amount
+        try:
+            amount = int(args[2])
+            if amount < 0 or amount > 255:
+                return (False, f"EV amount {amount} out of range (0-255)", None)
+        except ValueError:
+            return (False, f"Invalid EV amount '{args[2]}'", None)
+
+        return (True, None, gm_call)
+
+    def _validate_teach_move(self, gm_call: str, args: list) -> tuple:
+        """Validate GM.teachMove(slot, moveId, moveSlot)"""
+        if len(args) < 3:
+            return (False, f"teachMove requires 3 args (slot, moveId, moveSlot), got {len(args)}", None)
+
+        # Validate party slot
+        slot_valid, slot_result = self._validate_slot(args[0])
+        if not slot_valid:
+            return (False, slot_result, None)
+
+        # Validate move ID
+        try:
+            move_id = int(args[1])
+            if move_id < 0 or move_id > self.MAX_MOVE_ID:
+                return (False, f"Move ID {move_id} out of range (0-{self.MAX_MOVE_ID})", None)
+        except ValueError:
+            return (False, f"Invalid move ID '{args[1]}'", None)
+
+        # Validate move slot
+        try:
+            move_slot = int(args[2])
+            if move_slot < 0 or move_slot > self.MAX_MOVE_SLOT:
+                return (False, f"Move slot {move_slot} out of range (0-{self.MAX_MOVE_SLOT})", None)
+        except ValueError:
+            return (False, f"Invalid move slot '{args[2]}'", None)
+
+        return (True, None, gm_call)
+
+    def _validate_set_ivs(self, gm_call: str, args: list) -> tuple:
+        """Validate GM.setIVs(slot, ...) — various formats"""
+        if len(args) < 2:
+            return (False, f"setIVs requires at least 2 args, got {len(args)}", None)
+
+        # Validate slot
+        slot_valid, slot_result = self._validate_slot(args[0])
+        if not slot_valid:
+            return (False, slot_result, None)
+
+        # If 3 args: setIVs(slot, stat, value)
+        if len(args) == 3:
+            stat = args[1].upper().strip('"\'')
+            if stat not in self.VALID_STATS:
+                return (False, f"Invalid IV stat '{stat}'", None)
+            try:
+                iv_val = int(args[2])
+                if iv_val < 0 or iv_val > 31:
+                    return (False, f"IV value {iv_val} out of range (0-31)", None)
+            except ValueError:
+                return (False, f"Invalid IV value '{args[2]}'", None)
+
+        return (True, None, gm_call)
+
+    def _validate_give_item(self, gm_call: str, args: list) -> tuple:
+        """Validate GM.giveItem(slot, itemId)"""
+        if len(args) < 2:
+            return (False, f"giveItem requires 2 args (slot, itemId), got {len(args)}", None)
+
+        # Validate slot
+        slot_valid, slot_result = self._validate_slot(args[0])
+        if not slot_valid:
+            return (False, slot_result, None)
+
+        # Validate item ID
+        try:
+            item_id = int(args[1])
+            if item_id < 0 or item_id > self.MAX_ITEM_ID:
+                return (False, f"Item ID {item_id} out of range (0-{self.MAX_ITEM_ID})", None)
+        except ValueError:
+            return (False, f"Invalid item ID '{args[1]}'", None)
+
+        return (True, None, gm_call)
+
+    def _validate_set_shiny(self, gm_call: str, args: list) -> tuple:
+        """Validate GM.setShiny(slot, isShiny)"""
+        if len(args) < 2:
+            return (False, f"setShiny requires 2 args (slot, isShiny), got {len(args)}", None)
+
+        # Validate slot
+        slot_valid, slot_result = self._validate_slot(args[0])
+        if not slot_valid:
+            return (False, slot_result, None)
+
+        # isShiny should be true/false or 1/0
+        shiny_val = args[1].lower().strip()
+        if shiny_val not in ('true', 'false', '1', '0'):
+            return (False, f"Invalid shiny value '{args[1]}' (use true/false)", None)
+
+        return (True, None, gm_call)
+
+    def _validate_add_experience(self, gm_call: str, args: list) -> tuple:
+        """Validate GM.addExperience(slot, amount)"""
+        if len(args) < 2:
+            return (False, f"addExperience requires 2 args (slot, amount), got {len(args)}", None)
+
+        # Validate slot
+        slot_valid, slot_result = self._validate_slot(args[0])
+        if not slot_valid:
+            return (False, slot_result, None)
+
+        # Validate amount
+        try:
+            amount = int(args[1])
+            if amount < 0 or amount > 1000000:  # Sanity cap
+                return (False, f"Experience amount {amount} seems unreasonable", None)
+        except ValueError:
+            return (False, f"Invalid experience amount '{args[1]}'", None)
+
+        return (True, None, gm_call)
+
+    def _validate_set_friendship(self, gm_call: str, args: list) -> tuple:
+        """Validate GM.setFriendship(slot, value)"""
+        if len(args) < 2:
+            return (False, f"setFriendship requires 2 args (slot, value), got {len(args)}", None)
+
+        # Validate slot
+        slot_valid, slot_result = self._validate_slot(args[0])
+        if not slot_valid:
+            return (False, slot_result, None)
+
+        # Validate friendship value (0-255)
+        try:
+            value = int(args[1])
+            if value < 0 or value > 255:
+                return (False, f"Friendship {value} out of range (0-255)", None)
+        except ValueError:
+            return (False, f"Invalid friendship value '{args[1]}'", None)
+
+        return (True, None, gm_call)
+
+
 class PokemonGM:
     def __init__(self, config: dict, base_path: Path):
         self.config = config
@@ -755,6 +1032,10 @@ class PokemonGM:
         self.learning_directives = LearningDirectives(directives=custom_directives)
         if custom_directives:
             self.log(f"📚 Loaded {len(custom_directives)} custom learning directives")
+
+        # Issue #24 — Reward Command Validation (AgentDropoutV2-inspired, arxiv 2602.23258)
+        # "Rectify-or-reject" pattern: validate GM commands before execution
+        self.reward_validator = RewardValidator()
 
         # Load session history if persistent mode is enabled
         if self.session_persistent:
@@ -1582,10 +1863,24 @@ class PokemonGM:
                         response_snippet=response_text[:200],
                     )
 
-                    # Execute all extracted GM calls
+                    # Execute all extracted GM calls (with validation — Issue #24)
                     for gm_call in action_cmds:
-                        shell_cmd = f"echo '{gm_call}' | nc -w 1 {self.socket_host} {self.socket_port}"
-                        readable = self.get_readable_action(gm_call)
+                        # Issue #24: Rectify-or-reject validation (AgentDropoutV2-inspired)
+                        is_valid, error_msg, corrected = self.reward_validator.validate(gm_call)
+                        
+                        if not is_valid:
+                            # Reject invalid command
+                            print(f"  {C.RED}✗ REJECTED: {gm_call}{C.RESET}")
+                            print(f"    {C.DIM}→ {error_msg}{C.RESET}")
+                            continue
+                        
+                        # Use corrected command if auto-fixed
+                        final_cmd = corrected or gm_call
+                        if corrected and corrected != gm_call:
+                            print(f"  {C.YELLOW}⚠ AUTO-CORRECTED: {error_msg}{C.RESET}")
+                        
+                        shell_cmd = f"echo '{final_cmd}' | nc -w 1 {self.socket_host} {self.socket_port}"
+                        readable = self.get_readable_action(final_cmd)
                         if reward_type == 'visible':
                             print(f"  {C.BOLD}{C.YELLOW}★ VISIBLE: {readable}{C.RESET}")
                         else:
@@ -1593,7 +1888,7 @@ class PokemonGM:
                         try:
                             subprocess.run(shell_cmd, shell=True, timeout=5,
                                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                            print(f"  {C.GREEN}✓ {gm_call}{C.RESET}")
+                            print(f"  {C.GREEN}✓ {final_cmd}{C.RESET}")
                         except subprocess.TimeoutExpired:
                             print(f"  {C.YELLOW}✓ Sent{C.RESET}")
 
