@@ -616,4 +616,95 @@ Verified: compression code is correct, just awaiting daemon restart during gamep
 
 ---
 
-**Last Updated:** 2026-02-28 (3:15 AM EST)
+## 🔄 Work Log (2026-03-01)
+
+### Shipped: Reward Command Validation (#24)
+**Commit:** 38ba065
+**Research alignment:** AgentDropoutV2 (arxiv 2602.23258) — "rectify-or-reject" pattern
+
+#### Problem
+GM commands from Maren are executed without validation. Invalid parameters (wrong slot
+numbers, out-of-range move IDs, malformed stat names) could cause silent failures or
+undefined behavior in the Lua script. The AgentDropoutV2 paper identifies "error
+propagation as THE problem in MAS" — intercept before cascade.
+
+#### Solution: RewardValidator Class
+New `RewardValidator` implements the "rectify-or-reject" pattern:
+
+**Validation Rules:**
+| Parameter | Valid Range | Notes |
+|-----------|-------------|-------|
+| Party slot | 0-5 | 6 Pokemon max |
+| Move slot | 0-3 | 4 moves per Pokemon |
+| Move ID | 0-354 | Gen 3 range |
+| Item ID | 0-400 | Reasonable range |
+| EV stats | HP/ATK/DEF/SPA/SPD/SPE | Auto-corrects common mistakes |
+| IV values | 0-31 | Standard range |
+| Friendship | 0-255 | Standard range |
+
+**Features:**
+- **Pre-execution validation:** All GM.* commands validated before socket send
+- **Auto-correction:** Fixes common stat name mistakes (SPECIAL_ATTACK → SPA)
+- **Clear rejection logging:** Invalid commands logged with specific error messages
+- **Zero breaking changes:** Invalid commands simply skipped, valid ones execute normally
+
+**Commands Validated:**
+- `GM.addEVs(slot, stat, amount)`
+- `GM.teachMove(slot, moveId, moveSlot)`
+- `GM.setIVs(slot, stat, value)`
+- `GM.giveItem(slot, itemId)`
+- `GM.setShiny(slot, isShiny)`
+- `GM.addExperience(slot, amount)`
+- `GM.setFriendship(slot, value)`
+
+---
+
+### Observations
+
+#### Session Compression Still Pending
+session.json has 1974 events (6MB). Startup compression ready — will auto-trigger on
+next daemon restart during gameplay.
+
+#### Arc Ledger Status
+3 arcs awaiting payoff (unchanged since Feb 24):
+- IMMEDIATE [HIGH]: Combusken / Blaze Kick
+- PENDING [HIGH]: Ralts / Shiny on evolution
+- PENDING [MEDIUM]: Lombre / Giga Drain
+
+#### decisions.jsonl Status
+Still doesn't exist — no gameplay since DecisionLogger (#20) was shipped on Feb 25.
+Will auto-create on first agent response.
+
+---
+
+### Research Applied (Feb 27-28 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| AgentDropoutV2 | 2602.23258 | Reward Command Validation (#24) — SHIPPED |
+| ParamMem | 2602.23320 | (noted — parametric reflection for decision patterns) |
+| Tell Me What To Learn | 2602.23201 | Already applied in #23 (Learning Directives) |
+| FlashOptim | 2602.23349 | (noted — memory-efficient training, not applicable) |
+| InnerQ | 2602.23200 | (noted — KV cache quantization, not applicable) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (38ba065)
+- **Code changes:** +299 lines / -4 lines
+- **Issues created:** 1 (#24)
+- **Issues closed:** 1 (#24, shipped same session)
+- **New classes:** 1 (RewardValidator)
+- **Validation methods:** 8 (one per GM command type + helpers)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+
+---
+
+**Last Updated:** 2026-03-01 (3:15 AM EST)

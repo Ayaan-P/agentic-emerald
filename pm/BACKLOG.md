@@ -875,3 +875,87 @@ Last updated: 2026-02-28 (3:15 AM EST)
 Session duration: ~35 min
 Research: "Tell Me What To Learn" → 1 feature shipped
 
+---
+
+## Daily Standup — 2026-03-01, 3:15 AM
+
+### ✅ Completed Today
+
+#### Reward Command Validation (#24) — SHIPPED & CLOSED
+**Research:** AgentDropoutV2 (arxiv 2602.23258) — "rectify-or-reject" pattern
+
+**Problem:** GM commands executed without validation. Invalid parameters (wrong slot numbers,
+out-of-range move IDs, malformed stat names) could cause silent failures.
+
+**What shipped (commit 38ba065):**
+- [x] `RewardValidator` class with "rectify-or-reject" pattern
+- [x] Pre-execution validation of all GM.* commands
+- [x] Parameter range checks: slots (0-5), moves (0-354), IVs (0-31), etc.
+- [x] Auto-correction for common stat name mistakes (SPECIAL_ATTACK → SPA)
+- [x] Clear rejection logging with specific error messages
+- [x] Zero breaking changes — invalid commands simply skipped
+
+**Commands validated:**
+- `GM.addEVs(slot, stat, amount)` — validates slot, stat name, amount range
+- `GM.teachMove(slot, moveId, moveSlot)` — validates all three parameters
+- `GM.setIVs(slot, stat, value)` — validates IV range (0-31)
+- `GM.giveItem(slot, itemId)` — validates item ID range
+- `GM.setShiny(slot, isShiny)` — validates boolean value
+- `GM.addExperience(slot, amount)` — validates reasonable amount
+- `GM.setFriendship(slot, value)` — validates friendship range (0-255)
+
+**Impact:**
+- Prevents silent failures from malformed agent outputs
+- Auto-corrects common mistakes without blocking execution
+- Defensive improvement — no known bugs, but hardens the system
+
+---
+
+### 📊 Observations
+
+#### Session Compression Ready
+session.json still at 1974 events (6MB). Startup compression will auto-trigger on next
+daemon restart during gameplay.
+
+#### Arc Ledger Status
+3 arcs awaiting payoff (unchanged since Feb 24):
+- IMMEDIATE [HIGH]: Combusken / Blaze Kick
+- PENDING [HIGH]: Ralts / Shiny on evolution
+- PENDING [MEDIUM]: Lombre / Giga Drain
+
+#### decisions.jsonl Status
+Still doesn't exist — no gameplay since DecisionLogger shipped Feb 25.
+
+---
+
+### 📊 Research Applied (Feb 27-28 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| AgentDropoutV2 | 2602.23258 | Reward Command Validation (#24) — SHIPPED |
+| ParamMem | 2602.23320 | Noted (parametric reflection for decision patterns) |
+| InnerQ | 2602.23200 | Noted (KV cache quantization, not applicable) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (38ba065)
+- **Code changes:** +299 lines / -4 lines
+- **Issues created:** 1 (#24)
+- **Issues closed:** 1 (#24)
+- **New classes:** 1 (RewardValidator)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+
+---
+
+Last updated: 2026-03-01 (3:15 AM EST)
+Session duration: ~40 min
+Research: AgentDropoutV2 "rectify-or-reject" → 1 feature shipped
+
