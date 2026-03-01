@@ -2349,7 +2349,7 @@ class PokemonGM:
         
         # Dump state on meaningful events (not periodic polling)
         if event_type in ('battle_start', 'battle_end', 'level_up', 'move_learned', 
-                          'item_obtained', 'pokemon_caught', 'evolution', 'badge_obtained',
+                          'item_obtained', 'pokemon_caught', 'evolution',
                           'dialogue', 'map_change'):
             self.write_state_dump(data)
         
@@ -2526,7 +2526,8 @@ class PokemonGM:
             except (ValueError, TypeError):
                 pass
 
-            self.prompt_agent_async('BADGE_OBTAINED', {'state': data})
+            # Disabled: badge detection is unreliable, agent gets context from battles anyway
+            # self.prompt_agent_async('BADGE_OBTAINED', {'state': data})
         
         elif event_type == 'party_changed':
             # Debounce: only log party every 30 seconds max
