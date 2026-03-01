@@ -2347,8 +2347,11 @@ class PokemonGM:
         event_type = data.get('event_type', 'unknown')
         self.current_state = data  # Track for helpers
         
-        # Always dump current state for agent to read
-        self.write_state_dump(data)
+        # Dump state on meaningful events (not periodic polling)
+        if event_type in ('battle_start', 'battle_end', 'level_up', 'move_learned', 
+                          'item_obtained', 'pokemon_caught', 'evolution', 'badge_obtained',
+                          'dialogue', 'map_change'):
+            self.write_state_dump(data)
         
         if event_type == 'battle_start':
             enemy = data.get('enemy', {})
