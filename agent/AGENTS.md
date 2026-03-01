@@ -48,23 +48,11 @@ data/
   emerald_species.json  # Pokemon data
 ```
 
-## 📊 Live State File (CRITICAL)
+## 📊 Live State File
 
-**Before any action that depends on game state, READ `state/current.txt`.**
+`state/current.txt` contains full game state — party (moves, stats, EVs, IVs), player info, bag, battle state.
 
-This file is auto-updated on every game event and contains:
-- Full party: species, level, HP, **moves (with IDs)**, EVs, IVs, nature, held item
-- Player info: name, money, badges, location
-- Bag contents
-- Battle state (in battle? enemy stats?)
-
-**Example use case:**
-Before calling `GM.teachMove(2, 299, 1)`, read `state/current.txt` to confirm:
-1. What moves does slot 2 currently have?
-2. Does it already know move 299?
-3. Which move slot should be replaced?
-
-**Do NOT assume. Do NOT guess. READ THE FILE.**
+**Updated every event.** Read it if you need certainty before an action (e.g., checking current moves before teachMove). You can infer most state changes from events, but the file is there when you need ground truth.
 
 ---
 
