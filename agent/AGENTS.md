@@ -39,6 +39,7 @@ Don't skip this. Don't assume you remember. You wake up fresh every session. The
 ```
 state/
   gm_response.txt    # YOUR OUTPUT FILE - write here!
+  current.txt        # LIVE GAME STATE - read this before actions!
 memory/
   PLAYTHROUGH.md     # Persistent story memory
 lua/
@@ -46,6 +47,24 @@ lua/
 data/
   emerald_species.json  # Pokemon data
 ```
+
+## 📊 Live State File (CRITICAL)
+
+**Before any action that depends on game state, READ `state/current.txt`.**
+
+This file is auto-updated on every game event and contains:
+- Full party: species, level, HP, **moves (with IDs)**, EVs, IVs, nature, held item
+- Player info: name, money, badges, location
+- Bag contents
+- Battle state (in battle? enemy stats?)
+
+**Example use case:**
+Before calling `GM.teachMove(2, 299, 1)`, read `state/current.txt` to confirm:
+1. What moves does slot 2 currently have?
+2. Does it already know move 299?
+3. Which move slot should be replaced?
+
+**Do NOT assume. Do NOT guess. READ THE FILE.**
 
 ---
 

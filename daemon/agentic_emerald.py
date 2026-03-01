@@ -1336,6 +1336,112 @@ class PokemonGM:
         with open(self.events_file, 'a') as f:
             f.write(json.dumps(event) + "\n")
     
+    def write_state_dump(self, data: dict):
+        """
+        Write full game state to state/current.txt for agent to read.
+        Called on every event so it's always current.
+        """
+        state_file = self.state_dir / 'current.txt'
+        lines = []
+        lines.append(f"# CURRENT STATE — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"# Auto-updated on every game event. Read this before taking actions.")
+        lines.append("")
+        
+        # Player info
+        lines.append("## PLAYER")
+        lines.append(f"Name: {data.get('player_name', 'Unknown')}")
+        play_time = data.get('play_time', {})
+        lines.append(f"Play Time: {play_time.get('hours', 0)}h {play_time.get('minutes', 0)}m")
+        lines.append(f"Money: ${data.get('money', 0):,}")
+        lines.append(f"Badges: {data.get('badge_count', 0)}")
+        lines.append(f"Location: Map {data.get('map_group', 0)}-{data.get('map_num', 0)} @ ({data.get('player_x', 0)}, {data.get('player_y', 0)})")
+        lines.append("")
+        
+        # Party
+        lines.append("## PARTY")
+        party = data.get('party', [])
+        for p in party:
+            slot = p.get('slot', 0)
+            species_id = p.get('species', 0)
+            species_name = self.species_names.get(species_id, f"Species#{species_id}")
+            nickname = p.get('nickname', species_name)
+            level = p.get('level', 1)
+            hp = p.get('current_hp', 0)
+            max_hp = p.get('max_hp', 1)
+            
+            # Status
+            status_val = p.get('status', 0)
+            status_str = ""
+            if status_val & 0x07: status_str = " [SLP]"
+            elif status_val & 0x08: status_str = " [PSN]"
+            elif status_val & 0x10: status_str = " [BRN]"
+            elif status_val & 0x20: status_str = " [FRZ]"
+            elif status_val & 0x40: status_str = " [PAR]"
+            elif status_val & 0x80: status_str = " [TOX]"
+            
+            lines.append(f"[{slot}] {nickname} ({species_name}) L{level} | HP {hp}/{max_hp}{status_str}")
+            
+            # Moves
+            moves = p.get('moves', [0, 0, 0, 0])
+            pp = p.get('pp', [0, 0, 0, 0])
+            move_strs = []
+            for i, move_id in enumerate(moves):
+                if move_id > 0:
+                    move_name = MOVE_NAMES.get(move_id, f"Move#{move_id}")
+                    move_strs.append(f"{move_name}({pp[i] if i < len(pp) else '?'})")
+            lines.append(f"    Moves: [{', '.join(move_strs)}]")
+            lines.append(f"    Move IDs: {moves}")
+            
+            # Stats
+            lines.append(f"    Stats: ATK {p.get('attack', 0)} | DEF {p.get('defense', 0)} | SPD {p.get('speed', 0)} | SPA {p.get('sp_attack', 0)} | SPD {p.get('sp_defense', 0)}")
+            
+            # EVs
+            evs = p.get('evs', {})
+            if evs:
+                lines.append(f"    EVs: HP {evs.get('hp', 0)} | ATK {evs.get('attack', 0)} | DEF {evs.get('defense', 0)} | SPD {evs.get('speed', 0)} | SPA {evs.get('sp_attack', 0)} | SPD {evs.get('sp_defense', 0)}")
+            
+            # IVs
+            ivs = p.get('ivs', {})
+            if ivs:
+                lines.append(f"    IVs: HP {ivs.get('hp', 0)} | ATK {ivs.get('attack', 0)} | DEF {ivs.get('defense', 0)} | SPD {ivs.get('speed', 0)} | SPA {ivs.get('sp_attack', 0)} | SPD {ivs.get('sp_defense', 0)}")
+            
+            # Nature + held item
+            nature_id = p.get('nature', 0)
+            nature_names = ['Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty', 'Bold', 'Docile', 'Relaxed', 'Impish', 'Lax', 'Timid', 'Hasty', 'Serious', 'Jolly', 'Naive', 'Modest', 'Mild', 'Quiet', 'Bashful', 'Rash', 'Calm', 'Gentle', 'Sassy', 'Careful', 'Quirky']
+            nature_name = nature_names[nature_id] if nature_id < len(nature_names) else f"Nature#{nature_id}"
+            held = p.get('held_item', 0)
+            held_str = f"Item#{held}" if held > 0 else "None"
+            lines.append(f"    Nature: {nature_name} | Held: {held_str}")
+            lines.append(f"    EXP: {p.get('experience', 0):,}")
+            lines.append("")
+        
+        # Bag items (summary)
+        lines.append("## BAG (first 20 items)")
+        bag = data.get('bag_items', [])[:20]
+        for item in bag:
+            lines.append(f"  Item#{item.get('id', 0)} x{item.get('qty', 0)}")
+        if not bag:
+            lines.append("  (empty or not readable)")
+        lines.append("")
+        
+        # Battle state
+        lines.append("## BATTLE STATE")
+        if data.get('in_battle', False):
+            lines.append("In Battle: YES")
+            enemy = data.get('enemy_pokemon')
+            if enemy:
+                enemy_species = self.species_names.get(enemy.get('species', 0), f"Species#{enemy.get('species', 0)}")
+                lines.append(f"Enemy: {enemy_species} L{enemy.get('level', '?')} | HP {enemy.get('hp', '?')}/{enemy.get('maxHp', '?')}")
+                lines.append(f"Enemy Stats: ATK {enemy.get('attack', '?')} | DEF {enemy.get('defense', '?')} | SPD {enemy.get('speed', '?')}")
+        else:
+            lines.append("In Battle: NO")
+        
+        # Write atomically
+        tmp_file = state_file.with_suffix('.tmp')
+        with open(tmp_file, 'w') as f:
+            f.write('\n'.join(lines))
+        tmp_file.rename(state_file)
+    
     def detect_trainer_rematch(self, enemy_species: int, enemy_level: int) -> bool:
         """
         Detect if this trainer battle is likely a rematch.
@@ -2240,6 +2346,9 @@ class PokemonGM:
         """Process event from mGBA"""
         event_type = data.get('event_type', 'unknown')
         self.current_state = data  # Track for helpers
+        
+        # Always dump current state for agent to read
+        self.write_state_dump(data)
         
         if event_type == 'battle_start':
             enemy = data.get('enemy', {})

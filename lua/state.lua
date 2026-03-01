@@ -382,7 +382,7 @@ function State.getFullState()
     local battleInfo = State.getBattleInfo()
     local party = State.getParty()
     
-    -- Simplify party for JSON
+    -- Full party data for JSON (include EVs/IVs for state dump)
     local partyData = {}
     for _, p in ipairs(party) do
         table.insert(partyData, {
@@ -403,6 +403,8 @@ function State.getFullState()
             sp_defense = p.sp_defense,
             held_item = p.held_item,
             experience = p.experience,
+            evs = p.evs,
+            ivs = p.ivs,
         })
     end
     
