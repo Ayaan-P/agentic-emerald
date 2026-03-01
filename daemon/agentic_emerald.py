@@ -1359,7 +1359,7 @@ class PokemonGM:
         
         # Party
         lines.append("## PARTY")
-        party = data.get('party', [])
+        party = data.get('party') or []
         for p in party:
             slot = p.get('slot', 0)
             species_id = p.get('species', 0)
@@ -1417,7 +1417,7 @@ class PokemonGM:
         
         # Bag items (summary)
         lines.append("## BAG (first 20 items)")
-        bag = data.get('bag_items', [])[:20]
+        bag = (data.get('bag_items') or [])[:20]
         for item in bag:
             lines.append(f"  Item#{item.get('id', 0)} x{item.get('qty', 0)}")
         if not bag:
