@@ -707,4 +707,74 @@ Will auto-create on first agent response.
 
 ---
 
-**Last Updated:** 2026-03-01 (3:15 AM EST)
+## 🔄 Work Log (2026-03-02)
+
+### Shipped: Drought Breaker (#25)
+**Commit:** 161aa28
+**Research alignment:** Evaluating Stochasticity in Deep Research Agents (arxiv 2602.23271)
+
+#### Problem Diagnosed
+Analysis of `decisions.jsonl` revealed Maren was at **drought=16** — 16 consecutive
+invisible/none rewards. The existing warning at drought >= 3 wasn't changing agent behavior.
+Players weren't feeling Maren's presence at all.
+
+#### Solution: Two-Tier Drought Breaker
+Adds structured constraints to reduce agent variance (research shows 22% variance reduction).
+
+**Tier 1: Strong Warning (drought >= 8)**
+- Much stronger prompt warning than before
+- Explicitly lists available visible reward options
+- Warns that forced intervention is coming
+
+**Tier 2: Forced Heuristic (drought >= 12)**
+- If agent still says 'ACTION: none', daemon applies a heuristic visible reward
+- Heuristics are event-type specific:
+  - BATTLE_SUMMARY: Bonus XP to lead Pokemon (150-300)
+  - EXPLORATION_SUMMARY: Give useful held item (Leftovers, Shell Bell, etc.)
+  - GRIND_SUMMARY: XP to underleveled Pokemon
+- Logs forced decisions with 'FORCED:' prefix in decisions.jsonl
+
+#### Also Fixed: ARC LEDGER Out of Sync
+- Ralts Arc was marked PENDING but Kirlia is already shiny (see PLAYTHROUGH.md)
+- Updated to DELIVERED
+- Added new arcs based on current state:
+  - **Blaziken Awakens** (PENDING, HIGH) — Combusken just evolved
+  - **Swellow Leadership** (PENDING, MEDIUM) — Swellow leading 16 battles
+
+#### Impact
+- Drought cannot exceed ~12 events
+- Player will always feel Maren at least once per 12 events
+- Agent retains autonomy until threshold is reached
+- Heuristic rewards are reasonable (XP, held items) — not random
+
+---
+
+### Research Applied (Feb 28 - Mar 1 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| Evaluating Stochasticity in Deep Research Agents | 2602.23271 | Drought Breaker (#25) — SHIPPED |
+| ESAA (Event Sourcing for Autonomous Agents) | 2602.23193 | (noted — decisions.jsonl already follows this pattern) |
+| ParamMem | 2602.23320 | (noted — parametric reflection for decision patterns) |
+| FlashOptim | 2602.23349 | (noted — memory-efficient training, not applicable to daemon) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (161aa28)
+- **Code changes:** +123 lines / -3 lines
+- **Issues created:** 1 (#25)
+- **Issues closed:** 1 (#25, shipped same session)
+- **New methods:** 1 (`_get_heuristic_reward`)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+
+---
+
+**Last Updated:** 2026-03-02 (3:15 AM EST)
