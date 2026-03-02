@@ -1001,6 +1001,13 @@ class PokemonGM:
         self.last_agent_invoke_time = time.time()
         self.GRIND_BATCH_SIZE = 8       # Trigger after this many skipped events
         self.GRIND_TIMEOUT_SEC = 600    # Trigger after 10 min of silence
+
+        # Issue #25 — Drought Breaker (Evaluating Stochasticity paper, arxiv 2602.23271)
+        # Adds structure/constraints to reduce agent variance when drought is high.
+        # At DROUGHT_WARNING_THRESHOLD: strong warning in prompt
+        # At DROUGHT_BREAKER_THRESHOLD: force heuristic visible reward if agent says none
+        self.DROUGHT_WARNING_THRESHOLD = 8   # Strong warning at 8+ consecutive invisible
+        self.DROUGHT_BREAKER_THRESHOLD = 12  # Force heuristic at 12+ consecutive invisible
         
         # Battle tracking
         self.battle_history = []
@@ -1555,6 +1562,66 @@ class PokemonGM:
             return 'ev'
         # Everything else is visible or impactful
         return 'visible'
+
+    def _get_heuristic_reward(self, event_type: str) -> str:
+        """
+        Issue #25 — Drought Breaker heuristic reward generator.
+        
+        When agent gives "none" at critical drought levels, generate a reasonable
+        visible reward based on current game state. This ensures the player
+        feels Maren's presence even when the agent is being too passive.
+        
+        Heuristics by event type:
+        - BATTLE_SUMMARY: Bonus XP to the MVP (slot 0 usually led)
+        - EXPLORATION_SUMMARY: Give a useful held item
+        - GRIND_SUMMARY: Bonus XP to least-leveled party member
+        - Default: Small XP bonus to lead Pokemon
+        
+        Returns: GM command string or None if no heuristic available
+        """
+        try:
+            party = self.current_state.get('party', [])
+            if not party:
+                return None
+            
+            # Find best slot to reward
+            lead_slot = 0
+            lowest_level_slot = 0
+            lowest_level = 100
+            
+            for i, poke in enumerate(party):
+                level = poke.get('level', 100)
+                if level < lowest_level:
+                    lowest_level = level
+                    lowest_level_slot = i
+            
+            # Common useful held items in Gen 3 (item IDs)
+            # Leftovers=234, Shell Bell=253, Scope Lens=232, King's Rock=221
+            # Quick Claw=217, Bright Powder=219, Focus Band=230
+            HELD_ITEMS = [234, 253, 232, 221, 217, 219, 230]
+            import random
+            
+            if event_type == 'BATTLE_SUMMARY':
+                # Battle just ended — reward lead Pokemon with XP
+                xp_amount = random.choice([150, 200, 250, 300])
+                return f"GM.addExperience({lead_slot}, {xp_amount})"
+            
+            elif event_type == 'EXPLORATION_SUMMARY':
+                # Exploring — give a useful held item to lead
+                item_id = random.choice(HELD_ITEMS)
+                return f"GM.giveItem({lead_slot}, {item_id})"
+            
+            elif event_type == 'GRIND_SUMMARY':
+                # Long grind — help the underleveled Pokemon
+                xp_amount = random.choice([200, 300, 400])
+                return f"GM.addExperience({lowest_level_slot}, {xp_amount})"
+            
+            else:
+                # Default: small XP to lead
+                return f"GM.addExperience({lead_slot}, 100)"
+                
+        except Exception:
+            return None
     
     def _get_pending_arcs(self) -> list:
         """
@@ -2017,7 +2084,40 @@ class PokemonGM:
                             except Exception as e:
                                 print(f"  {C.RED}✗ Failed: {e}{C.RESET}")
                         else:
-                            print(f"  {C.DIM}No action taken (drought: {self.ev_drought_count}){C.RESET}")
+                            # Issue #25 — Drought Breaker: force heuristic reward if drought is critical
+                            if self.ev_drought_count >= self.DROUGHT_BREAKER_THRESHOLD:
+                                heuristic_cmd = self._get_heuristic_reward(event_type)
+                                if heuristic_cmd:
+                                    print(f"  {C.BOLD}{C.MAGENTA}🔄 DROUGHT BREAKER: Agent said none, forcing heuristic reward{C.RESET}")
+                                    shell_cmd = f"echo '{heuristic_cmd}' | nc -w 1 {self.socket_host} {self.socket_port}"
+                                    readable = self.get_readable_action(heuristic_cmd)
+                                    print(f"  {C.BOLD}{C.YELLOW}★ FORCED: {readable}{C.RESET}")
+                                    try:
+                                        subprocess.run(shell_cmd, shell=True, timeout=5,
+                                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                                        print(f"  {C.GREEN}✓ {heuristic_cmd}{C.RESET}")
+                                        # Reset drought since we gave a visible reward
+                                        self.ev_drought_count = 0
+                                        self.session_visible_rewards += 1
+                                        # Log the forced decision
+                                        self.decision_logger.log(
+                                            event_type=event_type,
+                                            action_cmd=f"FORCED:{heuristic_cmd}",
+                                            reward_type='visible',
+                                            drought=0,
+                                            arcs_active=len(self._get_pending_arcs()),
+                                            session_visible=self.session_visible_rewards,
+                                            arc_closed=None,
+                                            response_snippet="[DROUGHT BREAKER — heuristic reward forced]",
+                                        )
+                                    except subprocess.TimeoutExpired:
+                                        print(f"  {C.YELLOW}✓ Sent{C.RESET}")
+                                    except Exception as e:
+                                        print(f"  {C.RED}✗ Heuristic failed: {e}{C.RESET}")
+                                else:
+                                    print(f"  {C.DIM}No action taken (drought: {self.ev_drought_count}, no heuristic available){C.RESET}")
+                            else:
+                                print(f"  {C.DIM}No action taken (drought: {self.ev_drought_count}){C.RESET}")
                     
             except Exception as e:
                 self.log(f"❌ Agent error: {e}")
@@ -2312,7 +2412,25 @@ class PokemonGM:
                        "The daemon will automatically mark it DELIVERED in PLAYTHROUGH.md.\n")
         
         # Reward drought warning — escalate to visible if Maren has been invisible too long
-        if self.ev_drought_count >= 3:
+        # Issue #25 — Drought Breaker (Evaluating Stochasticity, arxiv 2602.23271)
+        if self.ev_drought_count >= self.DROUGHT_BREAKER_THRESHOLD:
+            # CRITICAL — at this level, the daemon will force a heuristic reward if you say "none"
+            prompt += f"\n🚨 CRITICAL DROUGHT: {self.ev_drought_count} consecutive invisible actions!\n"
+            prompt += "The player has not felt Maren's presence in over a dozen events.\n"
+            prompt += "⚠️  IF YOU SAY 'ACTION: none', the daemon will apply a HEURISTIC REWARD automatically.\n"
+            prompt += "You MUST give a visible reward NOW. Options:\n"
+            prompt += "  - GM.teachMove(slot, moveId, moveSlot) — learn a useful move\n"
+            prompt += "  - GM.giveItem(slot, itemId) — give a held item\n"
+            prompt += "  - GM.addExperience(slot, amount) — bonus XP for MVP\n"
+            prompt += "Pick something meaningful. The drought MUST break.\n"
+        elif self.ev_drought_count >= self.DROUGHT_WARNING_THRESHOLD:
+            # Strong warning — getting close to forced intervention
+            prompt += f"\n⚠️  HIGH DROUGHT WARNING: {self.ev_drought_count} consecutive invisible rewards!\n"
+            prompt += f"The player hasn't noticed Maren in {self.ev_drought_count} events.\n"
+            prompt += "You're close to automatic intervention. Give a VISIBLE reward:\n"
+            prompt += "  teachMove, giveItem, setShiny, or addExperience (>100).\n"
+            prompt += "EVs are invisible in Gen 3. The game needs to feel alive NOW.\n"
+        elif self.ev_drought_count >= 3:
             prompt += f"\n⚠️  IMPACT WARNING: {self.ev_drought_count} consecutive invisible rewards (EVs/none).\n"
             prompt += f"The player hasn't noticed Maren in {self.ev_drought_count} events.\n"
             prompt += "If this event scores 4+ on the checklist, use a VISIBLE reward: teachMove, giveItem, or setShiny.\n"
