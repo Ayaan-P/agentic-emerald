@@ -959,3 +959,17 @@ Last updated: 2026-03-01 (3:15 AM EST)
 Session duration: ~40 min
 Research: AgentDropoutV2 "rectify-or-reject" → 1 feature shipped
 
+
+
+## Latest Shipped (2026-03-02)
+
+- [x] **Drought Breaker** (#25) — Force heuristic rewards at critical drought
+  - Two-tier system: warning at 8+, forced heuristic at 12+
+  - Heuristics: XP bonus, held items (Leftovers, Shell Bell, etc.)
+  - Research: arxiv 2602.23271 (Evaluating Stochasticity)
+  - Commit: 161aa28
+
+- [x] **ARC LEDGER Sync** — Fixed outdated arc statuses
+  - Ralts Arc → DELIVERED (Kirlia is already shiny)
+  - Added: Blaziken Awakens (PENDING), Swellow Leadership (PENDING)
+
