@@ -2367,13 +2367,25 @@ class PokemonGM:
                     if summary.get('arcs'):
                         prompt += f"  Arcs: {', '.join(summary['arcs'])}\n"
 
-            # Then inject recent full-fidelity history
+            # Then inject recent history
+            # Issue #26 — Context Pollution Fix (MIT arxiv 2602.24287)
+            # Research shows removing prior assistant responses can HELP by avoiding
+            # "context pollution" where models over-condition on previous mistakes.
+            # Instead of injecting truncated responses, show only event type + action taken.
             if self.session_history:
                 recent_count = min(10, len(self.session_history))
-                prompt += f"\n=== RECENT HISTORY ({recent_count} of {len(self.session_history)} events, full fidelity) ===\n"
+                prompt += f"\n=== RECENT SESSION ({recent_count} events) ===\n"
                 for entry in self.session_history[-10:]:
-                    prompt += f"• [{entry.get('event_type', 'unknown')}] {entry.get('response', '')[:200]}\n"
-                prompt += "\nYou've seen these events before. Build on this context, don't repeat yourself.\n"
+                    event_type_str = entry.get('event_type', 'unknown')
+                    # Extract just the action from the response, not the full text
+                    response = entry.get('response', '')
+                    action = 'none'
+                    for line in response.split('\n'):
+                        if line.strip().startswith('ACTION:'):
+                            action = line.split('ACTION:', 1)[1].strip()[:50]
+                            break
+                    prompt += f"• {event_type_str} → {action}\n"
+                prompt += "Focus on current event. Don't repeat past decisions.\n"
         
         # === MAREN IMPACT SYSTEM ===
 
