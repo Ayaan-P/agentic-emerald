@@ -961,12 +961,105 @@ Research: AgentDropoutV2 "rectify-or-reject" → 1 feature shipped
 
 
 
-## Latest Shipped (2026-03-02)
+## Latest Shipped (2026-03-04)
+
+- [x] **Context Pollution Fix** (#26) — Events-only session history injection
+  - Based on MIT arxiv 2602.24287 "Do LLMs Benefit From Their Own Words?"
+  - Removes Maren's responses from session history injection
+  - ~90% token reduction in session history section
+  - Avoids over-conditioning on past "none" decisions
+  - Commit: 71ff30e
 
 - [x] **Drought Breaker** (#25) — Force heuristic rewards at critical drought
   - Two-tier system: warning at 8+, forced heuristic at 12+
   - Heuristics: XP bonus, held items (Leftovers, Shell Bell, etc.)
   - Research: arxiv 2602.23271 (Evaluating Stochasticity)
+  - Commit: 161aa28
+
+---
+
+## Daily Standup — 2026-03-04, 3:15 AM
+
+### ✅ Completed Today
+
+#### Context Pollution Fix (#26) — SHIPPED & CLOSED
+**Research:** MIT arxiv 2602.24287 "Do LLMs Benefit From Their Own Words?"
+
+**Problem diagnosed:** Analysis of decisions.jsonl revealed:
+- 111 decisions logged since Mar 1 gameplay
+- 91% "none" actions (101/111)
+- Max drought: 24 events, Avg drought: 6.2
+- Session history was injecting truncated Maren responses (200 chars)
+- Maren may have been over-conditioning on her own "ACTION: none" patterns
+
+**What shipped (commit 71ff30e):**
+- Changed session history injection from full response snippets to events-only
+- Before: `• [BATTLE_SUMMARY] OBSERVATION: Fled Tentacool...\nACTION: none`
+- After: `• BATTLE_SUMMARY → none`
+- Only inject event type + action taken, not full response text
+
+**Impact:**
+- ~90% token reduction in session history section
+- Avoids "context pollution" where model over-conditions on past mistakes
+- Research shows this often HELPS response quality
+
+---
+
+### 📊 Observations
+
+#### decisions.jsonl Now Populated!
+Mar 1 gameplay produced 111 decision records:
+- Total: 111 | Visible: 10 (9.0%) | EV: 0 | None: 101 (91%)
+- Max drought: 24 | Avg drought: 6.2
+- Drought Breaker (#25) was shipped AFTER this gameplay, so forced heuristics hadn't activated
+
+#### Arc Ledger Verified
+PLAYTHROUGH.md updated — 3 arcs DELIVERED, 2 arcs PENDING:
+- DELIVERED: Closer Arc (Combusken), Ralts Arc (Kirlia), Drainer Arc (Lombre)
+- PENDING [HIGH]: Blaziken Awakens — first Blaziken victory → visible reward
+- PENDING [MEDIUM]: Swellow Leadership — 5+ lead wins → aerial ace or sharp beak
+
+#### Mega Evolution Sprite Injection (WIP)
+Discovered active development work (uncommitted):
+- `sprites/mega_blaziken_*.bin` — GBA tile + palette data
+- `tools/png_to_gba.py` + `inject_sprite.py` — sprite conversion tools
+- `lua/gm_tools.lua` +150 lines — VRAM write functions
+- Created issue #27 to track — WIP, not ready for commit
+
+---
+
+### 📊 Research Applied (Mar 1-2 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| Do LLMs Benefit From Their Own Words? | 2602.24287 | Context Pollution Fix (#26) — SHIPPED |
+| ParamMem | 2602.23320 | Noted (temperature-controlled sampling for diversity) |
+| LoRA-Pre | 2602.24283 | Noted (ICLR Oral — efficient fine-tuning) |
+| Memory Caching (RNNs) | 2602.24281 | Noted (growing memory, architectural) |
+| HMASP | 2602.24068 | Noted (handoff protocols for multi-agent) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (71ff30e)
+- **Code changes:** +16 lines / -4 lines
+- **Issues created:** 2 (#26 shipped, #27 discovery)
+- **Issues closed:** 1 (#26)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP, cool but not core
+
+---
+
+Last updated: 2026-03-04 (3:35 AM EST)
+Session duration: ~20 min
+Research: MIT "Do LLMs Benefit From Their Own Words?" → 1 feature shipped, 1 WIP documented
   - Commit: 161aa28
 
 - [x] **ARC LEDGER Sync** — Fixed outdated arc statuses

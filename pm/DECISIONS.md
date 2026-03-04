@@ -777,4 +777,70 @@ Adds structured constraints to reduce agent variance (research shows 22% varianc
 
 ---
 
-**Last Updated:** 2026-03-02 (3:15 AM EST)
+## 🔄 Work Log (2026-03-04)
+
+### Shipped: Context Pollution Fix (#26)
+**Commit:** 71ff30e
+**Research alignment:** MIT arxiv 2602.24287 "Do LLMs Benefit From Their Own Words?"
+
+#### Problem Diagnosed
+Analysis of decisions.jsonl (111 entries from Mar 1 gameplay) revealed:
+- 91% "none" actions (101/111)
+- Max drought: 24 events
+- Avg drought: 6.2
+
+Session history was injecting truncated Maren responses (200 chars). Research shows
+models can "over-condition" on their prior outputs, especially mistakes. Maren may
+have been learning to say "none" from her own history.
+
+#### Solution: Events-Only Injection
+Changed recent history injection from full response snippets to event+action only:
+
+**Before:**
+```
+• [BATTLE_SUMMARY] OBSERVATION: Fled Tentacool...\nPATTERN: none\nACTION: none
+```
+
+**After:**
+```
+• BATTLE_SUMMARY → none
+```
+
+#### Impact
+- ~90% token reduction in session history section
+- Avoids context pollution from past "none" responses
+- Session flow preserved for continuity
+- Research shows this often HELPS response quality
+
+---
+
+### Discovery: Mega Evolution Sprite Injection (WIP)
+**Issue created:** #27
+
+Found active development work on runtime sprite injection:
+- `sprites/mega_blaziken_*.bin` — GBA tile + palette data
+- `tools/png_to_gba.py` + `inject_sprite.py` — sprite conversion
+- `lua/gm_tools.lua` +150 lines — VRAM write functions
+
+Status: WIP, not ready for commit. Cool visual feature but not core to GM.
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (71ff30e)
+- **Code changes:** +16 lines / -4 lines
+- **Issues created:** 2 (#26, #27)
+- **Issues closed:** 1 (#26)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution** (#27) — WIP, discovered today
+
+---
+
+**Last Updated:** 2026-03-04 (3:35 AM EST)
