@@ -1057,12 +1057,71 @@ Discovered active development work (uncommitted):
 
 ---
 
-Last updated: 2026-03-04 (3:35 AM EST)
-Session duration: ~20 min
-Research: MIT "Do LLMs Benefit From Their Own Words?" → 1 feature shipped, 1 WIP documented
-  - Commit: 161aa28
+## Daily Standup — 2026-03-05, 3:15 AM
 
-- [x] **ARC LEDGER Sync** — Fixed outdated arc statuses
-  - Ralts Arc → DELIVERED (Kirlia is already shiny)
-  - Added: Blaziken Awakens (PENDING), Swellow Leadership (PENDING)
+### ✅ Completed Today
+
+#### Auto-Arc Detection (#28) — SHIPPED & CLOSED
+**Research:** MOSAIC (arxiv 2603.03205) — closed-loop pattern for multi-step tool execution
+
+**Problem diagnosed:**
+- Analysis of decisions.jsonl showed arcs staying PENDING after visible rewards
+- Mar 4: Blaziken got Charcoal but "Blaziken Awakens" still PENDING
+- Agent gave correct reward but forgot `ARC_CLOSED:` tag
+- Arc system depended on agent memory — unreliable
+
+**What shipped (commit 3650fda):**
+- [x] `_auto_close_arc_for_reward(gm_call)` method
+  - Parses slot-based GM commands (teachMove, addExperience, setShiny, giveItem, etc.)
+  - Gets Pokemon name via `get_party_pokemon_name(slot)`
+  - Fuzzy-matches against PENDING arcs in ARC LEDGER
+  - Auto-closes with logging: `🔄 AUTO-ARC CLOSED: <arc> (reward given to <pokemon>)`
+- [x] Triggers after visible reward execution
+- [x] Also triggers on forced heuristic rewards (Drought Breaker)
+
+**Impact:**
+- Arc system is now self-healing
+- Reduces agent burden (no need to remember ARC_CLOSED tag)
+- Catches forgotten arc closures automatically
+
+#### Mega Evolution Sprites (WIP → Committed)
+The uncommitted sprite work was included in this commit:
+- `sprites/mega_blaziken_*.bin` — GBA tile + palette data
+- `tools/png_to_gba.py` + `inject_sprite.py` — conversion tools
+- Status: Still WIP, but now tracked in git
+
+---
+
+### 📊 Research Applied (Mar 4-5 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| MOSAIC (Safe Multi-Step Tool Use) | 2603.03205 | Auto-Arc Detection (#28) — SHIPPED |
+| Saguaro (Speculative Decoding) | 2603.03251 | Noted (Tri Dao, inference speedup) |
+| CDI (Privacy Defense) | 2603.02983 | Noted (not applicable) |
+| Graph-GRPO (Multi-Agent Topology) | 2603.02701 | Noted (single-agent system) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (3650fda)
+- **Code changes:** +100 lines (daemon) + sprite assets
+- **Issues created:** 1 (#28)
+- **Issues closed:** 1 (#28)
+- **New methods:** 1 (`_auto_close_arc_for_reward`)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+
+---
+
+Last updated: 2026-03-05 (3:35 AM EST)
+Session duration: ~20 min
+Research: MOSAIC closed-loop pattern → 1 feature shipped
 

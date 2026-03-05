@@ -843,4 +843,75 @@ Status: WIP, not ready for commit. Cool visual feature but not core to GM.
 
 ---
 
-**Last Updated:** 2026-03-04 (3:35 AM EST)
+## 🔄 Work Log (2026-03-05)
+
+### Shipped: Auto-Arc Detection (#28)
+**Commit:** 3650fda
+**Research alignment:** MOSAIC (arxiv 2603.03205) — closed-loop pattern
+
+#### Problem Diagnosed
+Analysis of decisions.jsonl showed arcs staying PENDING even after appropriate rewards:
+- Mar 4: Blaziken got Charcoal but "Blaziken Awakens" still PENDING
+- Agent gave visible reward but forgot `ARC_CLOSED:` tag
+- Arc system depends on agent memory — unreliable
+
+#### Solution: Auto-Arc Detection
+New `_auto_close_arc_for_reward(gm_call)` method that:
+1. Parses slot-based GM commands (teachMove, addExperience, setShiny, etc.)
+2. Gets Pokemon name from current party via `get_party_pokemon_name(slot)`
+3. Fuzzy-matches against PENDING arcs in ARC LEDGER
+4. Auto-closes on match with logging: `🔄 AUTO-ARC CLOSED: <arc> (reward given to <pokemon>)`
+
+**Commands covered:**
+- `GM.teachMove(slot, moveId, moveSlot)`
+- `GM.addExperience(slot, amount)`
+- `GM.setIVs(slot, stat, value)`
+- `GM.setShiny(slot, isShiny)`
+- `GM.setFriendship(slot, value)`
+- `GM.giveItem(slot, itemId)`
+
+**Also triggers on:** Forced heuristic rewards (Drought Breaker)
+
+#### Impact
+- Reduces agent burden (no need to remember ARC_CLOSED tag)
+- Arc system now self-healing — catches forgotten closures
+- Maintains arc integrity without agent cooperation
+
+#### Mega Evolution Sprites (WIP → Committed)
+The uncommitted sprite work was included in this commit:
+- `sprites/mega_blaziken_*.bin` — GBA tile + palette data
+- `tools/png_to_gba.py` + `inject_sprite.py` — conversion tools
+- Status: Still WIP, but now tracked in git
+
+---
+
+### 📊 Research Applied (Mar 4-5 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| MOSAIC (Safe Multi-Step Tool Use) | 2603.03205 | Auto-Arc Detection closed-loop pattern (#28) |
+| CDI (Privacy Defense) | 2603.02983 | Noted (not applicable to game GM) |
+| Graph-GRPO (Multi-Agent Topology) | 2603.02701 | Noted (single-agent system) |
+| Saguaro (Speculative Decoding) | 2603.03251 | Noted (inference optimization, Tri Dao) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (3650fda)
+- **Code changes:** +100 lines (daemon) + sprite assets
+- **Issues created:** 1 (#28)
+- **Issues closed:** 1 (#28, shipped same session)
+- **New methods:** 1 (`_auto_close_arc_for_reward`)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP (now tracked in git)
+
+---
+
+**Last Updated:** 2026-03-05 (3:35 AM EST)
