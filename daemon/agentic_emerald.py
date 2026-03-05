@@ -1913,6 +1913,112 @@ class PokemonGM:
 
         return False
 
+    def _auto_close_arc_for_reward(self, gm_call: str) -> bool:
+        """
+        Auto-detect and close arcs when visible rewards match PENDING Pokemon.
+
+        Issue #28 — Auto-Arc Detection (research: MOSAIC closed-loop pattern)
+        
+        When a visible reward is given to a Pokemon and the agent didn't explicitly
+        signal ARC_CLOSED, check if the Pokemon matches any PENDING arc and auto-close.
+
+        This reduces agent burden and catches cases where appropriate rewards are
+        given but the arc tag is forgotten.
+
+        Returns True if an arc was auto-closed.
+        """
+        import re
+        
+        # Parse slot number from GM command
+        slot_patterns = [
+            r'GM\.teachMove\((\d+),',      # teachMove(slot, moveId, moveSlot)
+            r'GM\.addExperience\((\d+),',  # addExperience(slot, amount)
+            r'GM\.setIVs\((\d+),',         # setIVs(slot, stat, value)
+            r'GM\.setShiny\((\d+),',       # setShiny(slot, isShiny)
+            r'GM\.setFriendship\((\d+),',  # setFriendship(slot, value)
+            r'GM\.giveItem\((\d+),',       # giveItem(slot, itemId) — held item
+        ]
+        
+        slot = None
+        for pattern in slot_patterns:
+            match = re.search(pattern, gm_call)
+            if match:
+                slot = int(match.group(1))
+                break
+        
+        if slot is None:
+            return False  # No slot-based command
+        
+        # Get Pokemon name from current party
+        pokemon_name = self.get_party_pokemon_name(slot)
+        if not pokemon_name or pokemon_name.startswith('Pokemon #'):
+            return False  # Can't identify Pokemon
+        
+        pokemon_lower = pokemon_name.lower()
+        
+        # Get pending arcs and check for match
+        playthrough = self.agent_memory_dir / 'PLAYTHROUGH.md'
+        if not playthrough.exists():
+            return False
+        
+        try:
+            text = playthrough.read_text()
+            lines = text.split('\n')
+            
+            # Find ARC LEDGER and check for matching Pokemon
+            in_ledger = False
+            header_seen = False
+            separator_seen = False
+            
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                
+                if stripped.startswith('## ARC LEDGER'):
+                    in_ledger = True
+                    continue
+                
+                if in_ledger and stripped.startswith('## ') and 'ARC LEDGER' not in stripped:
+                    break
+                
+                if not in_ledger:
+                    continue
+                
+                if '| Arc' in stripped and '| Status' in stripped:
+                    header_seen = True
+                    continue
+                
+                if header_seen and not separator_seen and stripped.startswith('|') and '---' in stripped:
+                    separator_seen = True
+                    continue
+                
+                if header_seen and separator_seen and stripped.startswith('|'):
+                    parts = [p.strip() for p in stripped.strip('|').split('|')]
+                    if len(parts) >= 3:
+                        arc_name = parts[0].strip()
+                        arc_pokemon = parts[1].strip().lower() if len(parts) > 1 else ''
+                        row_status = parts[2].strip().upper()
+                        
+                        # Check if Pokemon matches and arc is PENDING/IMMEDIATE
+                        if row_status in ('PENDING', 'IMMEDIATE') and \
+                           (pokemon_lower in arc_pokemon or arc_pokemon in pokemon_lower):
+                            # Found a match — close this arc
+                            parts[2] = 'DELIVERED'
+                            new_row = '| ' + ' | '.join(parts) + ' |'
+                            lines[i] = new_row
+                            playthrough.write_text('\n'.join(lines))
+                            
+                            C = Colors
+                            self.log(
+                                f"{C.BOLD}{C.CYAN}🔄 AUTO-ARC CLOSED: {arc_name} "
+                                f"(reward given to {pokemon_name}){C.RESET}"
+                            )
+                            return True
+            
+        except Exception as e:
+            self.log(f"⚠️ _auto_close_arc_for_reward failed: {e}")
+        
+        return False
+
     def prompt_agent_async(self, event_type: str, context: dict):
         """Send event to AI agent in background thread (with uncertainty check)"""
         # Always invoke for high-uncertainty events, skip routine ones
@@ -2062,6 +2168,11 @@ class PokemonGM:
                             subprocess.run(shell_cmd, shell=True, timeout=5,
                                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
                             print(f"  {C.GREEN}✓ {final_cmd}{C.RESET}")
+                            
+                            # Issue #28: Auto-Arc Detection — close matching arc if visible reward
+                            if reward_type == 'visible' and not arc_closed_name:
+                                self._auto_close_arc_for_reward(final_cmd)
+                                
                         except subprocess.TimeoutExpired:
                             print(f"  {C.YELLOW}✓ Sent{C.RESET}")
 
@@ -2099,6 +2210,8 @@ class PokemonGM:
                                         # Reset drought since we gave a visible reward
                                         self.ev_drought_count = 0
                                         self.session_visible_rewards += 1
+                                        # Issue #28: Auto-Arc Detection for forced rewards
+                                        self._auto_close_arc_for_reward(heuristic_cmd)
                                         # Log the forced decision
                                         self.decision_logger.log(
                                             event_type=event_type,

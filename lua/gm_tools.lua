@@ -1562,4 +1562,151 @@ function GM.forceEncounter()
     return true
 end
 
+-- =============================================================================
+-- SPRITE INJECTION (Runtime VRAM modification)
+-- =============================================================================
+
+-- GBA memory regions
+local OBJ_VRAM0 = 0x06010000   -- Object tiles (sprites)
+local OBJ_PLTT  = 0x05000200   -- Object palettes (16 palettes × 32 bytes)
+
+-- Sprite metadata addresses (from pokeemerald decomp)
+local GBATTLER_SPRITE_IDS = 0x02024084  -- gBattlerSpriteIds[4]
+local GSPRITES = 0x02020630             -- gSprites array
+local SPRITE_SIZE = 68                   -- sizeof(struct Sprite)
+
+-- Cache for custom sprites (species_id -> {tiles=bytes, pal=bytes})
+GM.spriteCache = {}
+
+-- Get battler's sprite VRAM address
+-- battlerSlot: 0 = player active, 1 = enemy active, 2/3 for doubles
+function GM.getBattlerSpriteVRAM(battlerSlot)
+    -- Read sprite index from gBattlerSpriteIds
+    local spriteIdx = emu:read8(GBATTLER_SPRITE_IDS + battlerSlot)
+    if spriteIdx == 0 or spriteIdx >= 64 then
+        return nil, "Invalid sprite index"
+    end
+    
+    -- Read sprite struct
+    local spriteAddr = GSPRITES + (spriteIdx * SPRITE_SIZE)
+    
+    -- OAM tile number is at offset 0x04 in struct Sprite (oam.tileNum)
+    -- Actually it's within the OamData which starts at offset 0
+    -- OamData.all.affineParam contains tile info, but simpler to read oam directly
+    -- oam is first 8 bytes, attr2 (bytes 4-5) contains tile number in bits 0-9
+    local attr2 = emu:read16(spriteAddr + 4)
+    local tileNum = attr2 & 0x3FF  -- 10-bit tile number
+    
+    -- Calculate VRAM address (each tile is 32 bytes in 4bpp mode)
+    local vramOffset = tileNum * 32
+    local vramAddr = OBJ_VRAM0 + vramOffset
+    
+    return vramAddr, tileNum
+end
+
+-- Get battler's palette slot
+function GM.getBattlerPaletteSlot(battlerSlot)
+    local spriteIdx = emu:read8(GBATTLER_SPRITE_IDS + battlerSlot)
+    if spriteIdx == 0 or spriteIdx >= 64 then
+        return nil
+    end
+    
+    local spriteAddr = GSPRITES + (spriteIdx * SPRITE_SIZE)
+    local attr2 = emu:read16(spriteAddr + 4)
+    local palNum = (attr2 >> 12) & 0x0F  -- Palette number in bits 12-15
+    
+    return palNum
+end
+
+-- Cache a sprite for later injection
+-- Call this when daemon sends sprite data
+function GM.cacheSprite(speciesId, tilesBase64, palBase64)
+    -- Decode base64 (simple implementation)
+    local function b64decode(data)
+        local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        data = string.gsub(data, '[^'..b..'=]', '')
+        return (data:gsub('.', function(x)
+            if x == '=' then return '' end
+            local r, f = '', b:find(x) - 1
+            for i = 6, 1, -1 do r = r .. (f % 2^i - f % 2^(i-1) > 0 and '1' or '0') end
+            return r
+        end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+            if #x ~= 8 then return '' end
+            local c = 0
+            for i = 1, 8 do c = c + (x:sub(i, i) == '1' and 2^(8-i) or 0) end
+            return string.char(c)
+        end))
+    end
+    
+    GM.spriteCache[speciesId] = {
+        tiles = b64decode(tilesBase64),
+        pal = b64decode(palBase64)
+    }
+    console:log("🎨 Cached sprite for species " .. speciesId .. " (" .. #GM.spriteCache[speciesId].tiles .. " bytes)")
+    return true
+end
+
+-- Inject cached sprite into VRAM for a battler
+function GM.injectSprite(battlerSlot, speciesId)
+    local cached = GM.spriteCache[speciesId]
+    if not cached then
+        console:log("❌ No cached sprite for species " .. speciesId)
+        return false
+    end
+    
+    local vramAddr, tileNum = GM.getBattlerSpriteVRAM(battlerSlot)
+    if not vramAddr then
+        console:log("❌ Could not get VRAM address for battler " .. battlerSlot)
+        return false
+    end
+    
+    -- Write tile data to VRAM
+    for i = 1, #cached.tiles do
+        emu:write8(vramAddr + i - 1, cached.tiles:byte(i))
+    end
+    
+    -- Write palette if we have it
+    if cached.pal and #cached.pal > 0 then
+        local palSlot = GM.getBattlerPaletteSlot(battlerSlot)
+        if palSlot then
+            local palAddr = OBJ_PLTT + (palSlot * 32)
+            for i = 1, #cached.pal do
+                emu:write8(palAddr + i - 1, cached.pal:byte(i))
+            end
+        end
+    end
+    
+    console:log("✨ Injected sprite for species " .. speciesId .. " to VRAM 0x" .. string.format("%08X", vramAddr))
+    return true
+end
+
+-- Direct injection with raw bytes (for testing)
+function GM.injectSpriteRaw(vramAddr, tileBytes)
+    for i = 1, #tileBytes do
+        emu:write8(vramAddr + i - 1, tileBytes:byte(i))
+    end
+    console:log("✨ Wrote " .. #tileBytes .. " bytes to VRAM 0x" .. string.format("%08X", vramAddr))
+    return true
+end
+
+-- Debug: dump battler sprite info
+function GM.debugBattlerSprite(battlerSlot)
+    local spriteIdx = emu:read8(GBATTLER_SPRITE_IDS + battlerSlot)
+    local vramAddr, tileNum = GM.getBattlerSpriteVRAM(battlerSlot)
+    local palSlot = GM.getBattlerPaletteSlot(battlerSlot)
+    
+    console:log("=== Battler " .. battlerSlot .. " Sprite Info ===")
+    console:log("  Sprite Index: " .. spriteIdx)
+    console:log("  Tile Number:  " .. (tileNum or "N/A"))
+    console:log("  VRAM Address: " .. (vramAddr and string.format("0x%08X", vramAddr) or "N/A"))
+    console:log("  Palette Slot: " .. (palSlot or "N/A"))
+    
+    return {
+        spriteIdx = spriteIdx,
+        tileNum = tileNum,
+        vramAddr = vramAddr,
+        palSlot = palSlot
+    }
+end
+
 return GM
