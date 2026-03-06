@@ -914,4 +914,71 @@ The uncommitted sprite work was included in this commit:
 
 ---
 
-**Last Updated:** 2026-03-05 (3:35 AM EST)
+## 🔄 Work Log (2026-03-06)
+
+### Shipped: Contextual Auto-Arc Detection for Bag Items (#29)
+**Commit:** 64d2e6b
+**Research alignment:** MOSAIC (arxiv 2603.03205) — closed-loop pattern extended with inference
+
+#### Problem Diagnosed
+Analysis of decisions.jsonl revealed auto-arc detection (#28) wasn't catching bag items:
+- Mar 4: Blaziken got Charcoal via `GM.give("charcoal", 1)` — a BAG item, not held item
+- Auto-arc only matched slot-based commands like `GM.giveItem(slot, itemId)`
+- `GM.give("name", qty)` has no slot → can't determine target Pokemon
+- "Blaziken Awakens" stayed PENDING despite visible reward
+
+**Root cause:** Agent docs (`agent/AGENTS.md`) teach `GM.give("item", qty)` syntax, but daemon
+validation and auto-arc detection only understood `GM.giveItem(slot, itemId)`.
+
+#### Solution: Contextual Inference
+Extended `_auto_close_arc_for_reward()` with battle-lead inference:
+
+1. **Track battle lead on wins:**
+   - Added `self.last_battle_lead` (Pokemon name) and `self.last_battle_lead_time`
+   - Updated on every battle win in `process_event()` → `battle_end`
+
+2. **Fallback inference for bag items:**
+   - If `GM.give("name", qty)` pattern detected and no slot available
+   - Check if `last_battle_lead_time` is within 2 minutes
+   - Use `last_battle_lead` as the inferred target Pokemon
+   - Log: `🔍 Inferring reward target: Blaziken (led battle 45s ago)`
+
+3. **Arc matching unchanged:**
+   - Same fuzzy matching against PENDING arcs in ARC LEDGER
+   - Auto-close and log: `🔄 AUTO-ARC CLOSED: Blaziken Awakens (reward given to Blaziken)`
+
+#### Impact
+- Arc closures now work for both held items and bag items
+- The common pattern (Blaziken sweeps → `GM.give("charcoal", 1)`) now closes arcs
+- No breaking changes — slot-based detection still works, inference is fallback only
+
+---
+
+### 📊 Research Applied (Mar 4-5 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| MOSAIC (Safe Multi-Step Tool Use) | 2603.03205 | Contextual inference for bag items (#29) |
+| Do LLMs Benefit From Their Own Words? | 2602.24287 | Already applied in #26 (context pollution fix) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (64d2e6b)
+- **Code changes:** +43 lines / -6 lines
+- **Issues created:** 1 (#29)
+- **Issues closed:** 1 (#29, shipped same session)
+- **Bugs fixed:** 1 (bag items not triggering auto-arc closure)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+
+---
+
+**Last Updated:** 2026-03-06 (3:15 AM EST)

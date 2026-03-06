@@ -1121,7 +1121,62 @@ The uncommitted sprite work was included in this commit:
 
 ---
 
-Last updated: 2026-03-05 (3:35 AM EST)
-Session duration: ~20 min
-Research: MOSAIC closed-loop pattern → 1 feature shipped
+## Daily Standup — 2026-03-06, 3:15 AM
+
+### ✅ Completed Today
+
+#### Contextual Auto-Arc Detection for Bag Items (#29) — SHIPPED & CLOSED
+
+**Problem diagnosed:**
+- Auto-arc detection (#28) only matched slot-based commands like `GM.giveItem(slot, itemId)`
+- Agent frequently uses `GM.give("item name", qty)` per agent docs — goes to BAG, no slot
+- Mar 4: Blaziken got Charcoal via `GM.give("charcoal", 1)` but arc stayed PENDING
+- No way to infer target Pokemon from bag items
+
+**What shipped (commit 64d2e6b):**
+- [x] Track `last_battle_lead` (Pokemon name) and `last_battle_lead_time` on battle wins
+- [x] Fallback inference in `_auto_close_arc_for_reward()`:
+  - If `GM.give("name", qty)` pattern detected
+  - And last battle was within 2 minutes
+  - Use `last_battle_lead` as inferred target Pokemon
+- [x] Log inference: `🔍 Inferring reward target: Blaziken (led battle 45s ago)`
+- [x] Arc matching unchanged — same fuzzy matching against PENDING arcs
+
+**Impact:**
+- Arc closures now work for both held items AND bag items
+- Common pattern (Blaziken sweeps → `GM.give("charcoal", 1)`) now closes arcs automatically
+- Reduces arc staleness when agent uses simpler `GM.give()` syntax
+
+---
+
+### 📊 Research Applied (Mar 4-6 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| MOSAIC (Safe Multi-Step Tool Use) | 2603.03205 | Contextual inference (#29) — SHIPPED |
+| Do LLMs Benefit From Their Own Words? | 2602.24287 | Already applied (#26) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (64d2e6b)
+- **Code changes:** +43 lines / -6 lines
+- **Issues created:** 1 (#29)
+- **Issues closed:** 1 (#29)
+- **Bugs fixed:** 1 (bag items not triggering auto-arc closure)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+
+---
+
+Last updated: 2026-03-06 (3:15 AM EST)
+Session duration: ~30 min
+Research: MOSAIC contextual inference → 1 bug fix shipped
 
