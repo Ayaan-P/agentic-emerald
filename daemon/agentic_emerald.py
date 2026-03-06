@@ -1013,6 +1013,9 @@ class PokemonGM:
         self.battle_history = []
         self.battle_buffer = []
         self.in_battle = False
+        # Issue #29 — Contextual auto-arc detection for bag items
+        self.last_battle_lead = None      # Pokemon name who led the last battle
+        self.last_battle_lead_time = 0    # Timestamp of last battle end
         self.battle_start_time = None
         self.battle_start_hp = {}
         self.battle_start_levels = {}
@@ -1918,9 +1921,13 @@ class PokemonGM:
         Auto-detect and close arcs when visible rewards match PENDING Pokemon.
 
         Issue #28 — Auto-Arc Detection (research: MOSAIC closed-loop pattern)
+        Issue #29 — Contextual detection for bag items (GM.give)
         
         When a visible reward is given to a Pokemon and the agent didn't explicitly
         signal ARC_CLOSED, check if the Pokemon matches any PENDING arc and auto-close.
+
+        For slot-based commands (teachMove, giveItem, etc.), we know which Pokemon.
+        For bag commands (GM.give), we infer from the last battle lead if recent.
 
         This reduces agent burden and catches cases where appropriate rewards are
         given but the arc tag is forgotten.
@@ -1939,6 +1946,9 @@ class PokemonGM:
             r'GM\.giveItem\((\d+),',       # giveItem(slot, itemId) — held item
         ]
         
+        pokemon_name = None
+        
+        # Try slot-based detection first
         slot = None
         for pattern in slot_patterns:
             match = re.search(pattern, gm_call)
@@ -1946,13 +1956,32 @@ class PokemonGM:
                 slot = int(match.group(1))
                 break
         
-        if slot is None:
-            return False  # No slot-based command
+        if slot is not None:
+            # Get Pokemon name from current party
+            pokemon_name = self.get_party_pokemon_name(slot)
+            if not pokemon_name or pokemon_name.startswith('Pokemon #'):
+                pokemon_name = None  # Can't identify Pokemon from slot
         
-        # Get Pokemon name from current party
-        pokemon_name = self.get_party_pokemon_name(slot)
-        if not pokemon_name or pokemon_name.startswith('Pokemon #'):
-            return False  # Can't identify Pokemon
+        # Issue #29 — Fallback: for bag items (GM.give), use last battle lead
+        # This handles cases like GM.give("charcoal", 1) given right after Blaziken sweeps
+        if pokemon_name is None:
+            bag_pattern = r'GM\.give\(["\']([^"\']+)["\'],\s*\d+'
+            if re.search(bag_pattern, gm_call):
+                # It's a bag item — check if we have a recent battle lead
+                time_since_battle = time.time() - getattr(self, 'last_battle_lead_time', 0)
+                last_lead = getattr(self, 'last_battle_lead', None)
+                
+                # Only use inference if battle was within 2 minutes
+                if last_lead and time_since_battle < 120:
+                    pokemon_name = last_lead
+                    C = Colors
+                    self.log(
+                        f"{C.DIM}🔍 Inferring reward target: {pokemon_name} "
+                        f"(led battle {time_since_battle:.0f}s ago){C.RESET}"
+                    )
+        
+        if not pokemon_name:
+            return False  # Can't determine target Pokemon
         
         pokemon_lower = pokemon_name.lower()
         
@@ -2701,6 +2730,14 @@ class PokemonGM:
                 was_close=(avg_hp < 0.25),
                 is_trainer=any(e.get('is_trainer') for e in self.battle_buffer if e.get('event') == 'START'),
             )
+
+            # Issue #29 — Track battle lead for contextual auto-arc detection
+            # When visible bag items (GM.give) are given, we can infer the target Pokemon
+            # from the lead of the most recent battle.
+            if party and len(party) > 0 and outcome == 1:  # Only on wins
+                lead_species = party[0].get('species', 0)
+                self.last_battle_lead = self.get_species_name(lead_species)
+                self.last_battle_lead_time = time.time()
 
             # Record to battle history
             battle_record = {
