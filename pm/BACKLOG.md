@@ -961,7 +961,16 @@ Research: AgentDropoutV2 "rectify-or-reject" → 1 feature shipped
 
 
 
-## Latest Shipped (2026-03-04)
+## Latest Shipped (2026-03-07)
+
+- [x] **Instruction Fade-Out Prevention** (#30) — System reminders counter agent drift
+  - Based on OPENDEV paper (arxiv 2603.05344)
+  - Detects instruction drift via consecutive_none_count + drought
+  - Injects system reminder restating Maren's core purpose
+  - Complements Drought Breaker (#25) — softer intervention
+  - Commit: 6bae678
+
+## Shipped (2026-03-04)
 
 - [x] **Context Pollution Fix** (#26) — Events-only session history injection
   - Based on MIT arxiv 2602.24287 "Do LLMs Benefit From Their Own Words?"

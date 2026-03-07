@@ -981,4 +981,82 @@ Extended `_auto_close_arc_for_reward()` with battle-lead inference:
 
 ---
 
-**Last Updated:** 2026-03-06 (3:15 AM EST)
+## 🔄 Work Log (2026-03-07)
+
+### Shipped: Instruction Fade-Out Prevention (#30)
+**Commit:** 6bae678
+**Research alignment:** OPENDEV (arxiv 2603.05344) — "Building AI Coding Agents for the Terminal"
+
+#### Problem Diagnosed
+Analysis of decisions.jsonl (130 entries) revealed Maren is experiencing **instruction fade-out**:
+- EXPLORATION_SUMMARY: 97% "none" rate (72/74)
+- BATTLE_SUMMARY: 84% "none" rate (42/50)
+- Drought frequently climbs to 12+ before forced intervention
+
+The OPENDEV paper specifically identifies this problem and recommends "event-driven system
+reminders to counter instruction fade-out."
+
+#### Solution: System Reminder Injection
+New tracking variables:
+- `consecutive_none_count` — consecutive "none" or EV-only responses
+- `events_since_system_reminder` — cadence control (min 10 events between reminders)
+
+Trigger conditions (all must be true):
+- Drought >= 5 events
+- Consecutive none >= 4 responses
+- No system reminder in last 10 events
+
+Reminder content:
+- Restates core purpose: "Make the game feel ALIVE"
+- Contrasts visible vs invisible rewards (EVs are invisible in Gen 3)
+- Shows current state: drought count, pending arcs
+- Self-reflection prompt: "Would the player notice Maren is here?"
+
+#### Impact
+- Complements Drought Breaker (#25) — softer intervention before forced heuristics
+- Counters instruction drift without being aggressive
+- Resets after each reminder to avoid spamming
+
+---
+
+### New Issue Created (#31)
+**research: Performative CoT Detection (Reasoning Theater)**
+- From Mar 6 digest: arxiv 2603.05488 (Boppana, Geiger et al.)
+- Many of Maren's "none" responses are full-length but contain no useful reasoning
+- Paper shows probe-guided early exit can reduce tokens by 80%
+- Potential: compress response format for routine events
+- Priority: LOW — research direction
+
+---
+
+### 📊 Research Applied (Mar 6 Digest)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| OPENDEV | 2603.05344 | Instruction Fade-Out Prevention (#30) — SHIPPED |
+| Reasoning Theater | 2603.05488 | New issue #31 (performative CoT detection) |
+| OPSDC | 2603.05433 | Noted (reasoning compression, related to #31) |
+| FlashAttention-4 | 2603.05451 | Noted (Tri Dao, infrastructure-level) |
+| InfoFlow KV | 2603.05353 | Noted (context retrieval optimization) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (6bae678)
+- **Code changes:** +55 lines
+- **Issues created:** 2 (#30 shipped, #31 research)
+- **Issues closed:** 1 (#30)
+- **New tracking vars:** 3 (consecutive_none_count, events_since_system_reminder, SYSTEM_REMINDER_INTERVAL)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+
+---
+
+**Last Updated:** 2026-03-07 (3:15 AM EST)
