@@ -1008,6 +1008,14 @@ class PokemonGM:
         # At DROUGHT_BREAKER_THRESHOLD: force heuristic visible reward if agent says none
         self.DROUGHT_WARNING_THRESHOLD = 8   # Strong warning at 8+ consecutive invisible
         self.DROUGHT_BREAKER_THRESHOLD = 12  # Force heuristic at 12+ consecutive invisible
+
+        # Issue #30 — Instruction Fade-Out Prevention (OPENDEV paper, arxiv 2603.05344)
+        # Research shows agents drift from their instructions over time ("instruction fade-out").
+        # Counter this with event-driven system reminders that restate core purpose.
+        # Triggered when: high drought AND consecutive "none" responses AND no recent reminder.
+        self.events_since_system_reminder = 0
+        self.SYSTEM_REMINDER_INTERVAL = 10  # Min events between system reminders
+        self.consecutive_none_count = 0     # Track consecutive "none" responses
         
         # Battle tracking
         self.battle_history = []
@@ -2153,10 +2161,17 @@ class PokemonGM:
                     if reward_type == 'visible':
                         self.ev_drought_count = 0
                         self.session_visible_rewards += 1
+                        # Issue #30: Reset fade-out counters on visible reward
+                        self.consecutive_none_count = 0
                     elif reward_type == 'ev':
                         self.ev_drought_count += 1
+                        self.consecutive_none_count += 1  # EVs are invisible = "none" from player POV
                     else:
                         self.ev_drought_count += 1
+                        self.consecutive_none_count += 1
+
+                    # Issue #30 — Track events for system reminder cadence
+                    self.events_since_system_reminder += 1
 
                     # Issue #20 — Log decision for future pattern retrieval (MAS-on-the-Fly)
                     final_action = action_cmds[0] if action_cmds else (action_cmd or 'none')
@@ -2530,6 +2545,46 @@ class PokemonGM:
                 prompt += "Focus on current event. Don't repeat past decisions.\n"
         
         # === MAREN IMPACT SYSTEM ===
+
+        # Issue #30 — Instruction Fade-Out Prevention (OPENDEV paper, arxiv 2603.05344)
+        # Research shows agents drift from instructions over time. Counter with periodic
+        # system reminders that restate core purpose. Triggered when:
+        # 1. Drought is high (player hasn't felt Maren)
+        # 2. Consecutive "none" responses indicate drift
+        # 3. Enough events have passed since the last reminder
+        should_remind = (
+            self.ev_drought_count >= 5 and
+            self.consecutive_none_count >= 4 and
+            self.events_since_system_reminder >= self.SYSTEM_REMINDER_INTERVAL
+        )
+        if should_remind:
+            pending_arcs = self._get_pending_arcs()
+            arc_count = len(pending_arcs)
+            prompt += f"\n{'='*56}\n"
+            prompt += "=== SYSTEM REMINDER — INSTRUCTION FADE-OUT DETECTED ===\n"
+            prompt += f"{'='*56}\n"
+            prompt += "You are MAREN, the invisible Game Master for Pokemon Emerald.\n"
+            prompt += "\n"
+            prompt += "YOUR CORE PURPOSE:\n"
+            prompt += "Make the game feel ALIVE. The player should feel magic moments —\n"
+            prompt += "not just stat noise. EVs are invisible in Gen 3. The player\n"
+            prompt += "NEVER notices +3 SpA EVs. They DO notice:\n"
+            prompt += "  • A Pokemon suddenly learning a powerful move\n"
+            prompt += "  • A rare held item appearing after a clutch win\n"
+            prompt += "  • A shiny sparkle when their favorite evolves\n"
+            prompt += "  • Bonus XP that pushes them over a level threshold\n"
+            prompt += "\n"
+            prompt += f"CURRENT STATE:\n"
+            prompt += f"  • You've been invisible for {self.ev_drought_count} events\n"
+            prompt += f"  • Last {self.consecutive_none_count} responses were 'none' or EVs\n"
+            if arc_count > 0:
+                prompt += f"  • You have {arc_count} pending arc(s) waiting for payoff\n"
+            prompt += "\n"
+            prompt += "QUESTION TO ASK YOURSELF:\n"
+            prompt += "If I were a player, would I notice Maren is here? If no, act.\n"
+            prompt += f"{'='*56}\n\n"
+            # Reset the reminder counter
+            self.events_since_system_reminder = 0
 
         # Issue #18 (Multi-layer memory, FluxMem-inspired):
         # HOT layer — ARC LEDGER rows always injected (see below).
