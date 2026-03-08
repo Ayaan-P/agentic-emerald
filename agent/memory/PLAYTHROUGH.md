@@ -14,7 +14,7 @@
 | The Closer Arc | Combusken | DELIVERED | Teach Blaze Kick (GM.teachMove(0, 299, X)) at next significant trainer victory | HIGH |
 | The Ralts Arc | Kirlia | DELIVERED | GM.setShiny(X) the moment Ralts evolves into Kirlia — DONE, shiny at evolution | HIGH |
 | The Drainer Arc | Lombre | DELIVERED | GM.teachMove(X, 202, X) (Giga Drain) when Lombre is MVP of a fight | MEDIUM |
-| Blaziken Awakens | Blaziken | PENDING | First Blaziken battle victory → visible reward (rare item or signature move upgrade) | HIGH |
+| Blaziken Awakens | Blaziken | DELIVERED | First Blaziken battle victory → visible reward (Charcoal given Mar 4 after sweep) | HIGH |
 | Swellow Leadership | Swellow | PENDING | If Swellow leads 5+ wins, acknowledge with aerial ace or sharp beak | MEDIUM |
 
 <!-- To close an arc: change Status to DELIVERED and note the session/event -->

@@ -1016,6 +1016,11 @@ class PokemonGM:
         self.events_since_system_reminder = 0
         self.SYSTEM_REMINDER_INTERVAL = 10  # Min events between system reminders
         self.consecutive_none_count = 0     # Track consecutive "none" responses
+
+        # Issue #32 — Response Format Compression (OPSDC + Reasoning Theater, arxiv 2603.05433/05488)
+        # Research shows reasoning models often produce "performative" CoT that wastes tokens
+        # without changing the answer. For low-uncertainty events, request abbreviated format.
+        self.CONCISE_MODE_THRESHOLD = 0.4   # Uncertainty below this → request concise response
         
         # Battle tracking
         self.battle_history = []
@@ -2502,6 +2507,17 @@ class PokemonGM:
             prompt += "2. Has enough grind happened that an encouragement is warranted?\n"
             prompt += "3. If nothing warrants action, that's OK — say OBSERVATION: Watching, and ACTION: none\n"
             prompt += "Keep it brief. This is a check-in, not a major event.\n"
+
+        # Issue #32 — Response Format Compression (OPSDC + Reasoning Theater)
+        # Research (arxiv 2603.05433, 2603.05488) shows reasoning models often produce
+        # "performative" CoT that wastes 70-80% of tokens without changing the answer.
+        # For low-uncertainty routine events, request abbreviated response format.
+        event_uncertainty = self.score_event_uncertainty(event_type, ctx)
+        if event_uncertainty < self.CONCISE_MODE_THRESHOLD and event_type not in ('GRIND_SUMMARY',):
+            prompt += "\n⚡ CONCISE MODE — This is a routine event.\n"
+            prompt += "Skip OBSERVATION/PATTERN/MEMORY. Just respond with:\n"
+            prompt += "  ACTION: <GM.xxx> or ACTION: none\n"
+            prompt += "If something surprising happened, escalate with full format instead.\n"
         
         # Add accumulated skipped events as context
         if self.skipped_events:
