@@ -1185,7 +1185,79 @@ The uncommitted sprite work was included in this commit:
 
 ---
 
-Last updated: 2026-03-06 (3:15 AM EST)
-Session duration: ~30 min
-Research: MOSAIC contextual inference → 1 bug fix shipped
+## Daily Standup — 2026-03-08, 3:16 AM
+
+### ✅ Completed Today
+
+#### Response Format Compression (#32) — SHIPPED & CLOSED
+**Research:** OPSDC (arxiv 2603.05433) + Reasoning Theater (arxiv 2603.05488)
+
+**Problem diagnosed:**
+Analysis of decisions.jsonl revealed massive token waste:
+- 91% of Maren responses are "none" actions
+- Each still includes full OBSERVATION/PATTERN/MEMORY/ACTION preamble
+- Routine wild battles and exploration don't need reasoning preamble
+- Token waste: ~70% of tokens serve no purpose on routine events
+
+Research validation:
+- **OPSDC** shows 57-59% token reduction via concise reasoning
+- **Reasoning Theater** shows 80% of CoT is performative on easy questions
+
+**What shipped (commit 29b1be1):**
+- [x] Added `CONCISE_MODE_THRESHOLD = 0.4` to daemon config
+- [x] Low-uncertainty events get concise format instruction:
+  - Skip OBSERVATION/PATTERN/MEMORY preamble
+  - Just respond with `ACTION: <GM.xxx>` or `ACTION: none`
+  - Agent can escalate to full format if something surprising
+- [x] Excluded GRIND_SUMMARY (those need full context for arc checking)
+
+**Impact:**
+- Estimated 70-80% token reduction on routine wild battles
+- No change on significant events (trainer battles, close calls, arcs)
+- Response still triggers all reward classification and arc detection logic
+
+---
+
+#### Fixed: Stale Arc Ledger (Blaziken Awakens)
+**Issue discovered:** "Blaziken Awakens" arc was still PENDING despite Blaziken receiving
+Charcoal on Mar 4. Root cause: bag item inference (#29) wasn't implemented until Mar 6.
+
+**Fix:** Manually updated ARC LEDGER → DELIVERED with note about Mar 4 Charcoal reward.
+
+---
+
+### 📊 Research Applied (Mar 6-7 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| OPSDC (Self-Distillation) | 2603.05433 | Response Format Compression (#32) — SHIPPED |
+| Reasoning Theater | 2603.05488 | Response Format Compression (#32) — SHIPPED |
+| FlashAttention-4 | 2603.05451 | Noted (Tri Dao, infrastructure) |
+| InfoFlow KV | 2603.05353 | Noted (context retrieval, future Dytto work) |
+| OPENDEV | 2603.05344 | Already applied in #30 |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (29b1be1)
+- **Code changes:** +17 lines / -1 line
+- **Issues created:** 1 (#32)
+- **Issues closed:** 1 (#32)
+- **Arcs fixed:** 1 (Blaziken Awakens → DELIVERED)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+Last updated: 2026-03-08 (3:16 AM EST)
+Session duration: ~25 min
+Research: OPSDC + Reasoning Theater → 1 feature shipped, 1 arc fix
 

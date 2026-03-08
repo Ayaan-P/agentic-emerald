@@ -1059,4 +1059,85 @@ Reminder content:
 
 ---
 
-**Last Updated:** 2026-03-07 (3:15 AM EST)
+## 🔄 Work Log (2026-03-08)
+
+### Shipped: Response Format Compression (#32)
+**Commit:** 29b1be1
+**Research alignment:** OPSDC (arxiv 2603.05433) + Reasoning Theater (arxiv 2603.05488)
+
+#### Problem Diagnosed
+Analysis of decisions.jsonl revealed massive token waste:
+- 91% of Maren responses are "none" actions
+- Each still includes full OBSERVATION/PATTERN/MEMORY/ACTION preamble
+- Routine wild battles and exploration don't need reasoning
+- Token waste: ~70% of tokens serve no purpose on routine events
+
+Research validation:
+- **OPSDC** shows 57-59% token reduction via concise reasoning
+- **Reasoning Theater** shows 80% of CoT is performative on easy questions
+
+#### Solution: Concise Mode
+Added `CONCISE_MODE_THRESHOLD = 0.4` — for low-uncertainty events:
+- Skip OBSERVATION/PATTERN/MEMORY preamble
+- Just respond with `ACTION: <GM.xxx>` or `ACTION: none`
+- Agent can escalate to full format if something surprising happens
+- Excluded GRIND_SUMMARY (those need full context for arc checking)
+
+Prompt injection:
+```
+⚡ CONCISE MODE — This is a routine event.
+Skip OBSERVATION/PATTERN/MEMORY. Just respond with:
+  ACTION: <GM.xxx> or ACTION: none
+If something surprising happened, escalate with full format instead.
+```
+
+#### Impact
+- Estimated 70-80% token reduction on routine wild battles
+- No change on significant events (trainer battles, close calls, arcs)
+- Response still triggers all reward classification and arc detection logic
+
+---
+
+### Fixed: Stale Arc Ledger (Blaziken Awakens)
+**Issue discovered:** "Blaziken Awakens" arc was still PENDING despite Blaziken receiving
+Charcoal on Mar 4. Root cause: The bag item inference feature (#29) wasn't implemented
+until Mar 6, so the Mar 4 `GM.give("charcoal", 1)` didn't trigger auto-arc closure.
+
+**Fix:** Manually updated ARC LEDGER to mark "Blaziken Awakens" as DELIVERED with note
+about the Charcoal reward on Mar 4.
+
+---
+
+### 📊 Research Applied (Mar 6-7 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| OPSDC (Self-Distillation for Compression) | 2603.05433 | Response Format Compression (#32) — SHIPPED |
+| Reasoning Theater (Performative CoT) | 2603.05488 | Response Format Compression (#32) — SHIPPED |
+| FlashAttention-4 | 2603.05451 | Noted (Tri Dao, infrastructure-level) |
+| InfoFlow KV | 2603.05353 | Noted (context retrieval, future Dytto work) |
+| OPENDEV | 2603.05344 | Already applied in #30 (instruction fade-out) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (29b1be1)
+- **Code changes:** +17 lines / -1 line
+- **Issues created:** 1 (#32)
+- **Issues closed:** 1 (#32)
+- **Arcs fixed:** 1 (Blaziken Awakens → DELIVERED)
+- **New tracking vars:** 1 (CONCISE_MODE_THRESHOLD)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-08 (3:16 AM EST)
