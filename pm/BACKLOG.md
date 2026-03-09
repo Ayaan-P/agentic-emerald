@@ -1257,7 +1257,77 @@ Charcoal on Mar 4. Root cause: bag item inference (#29) wasn't implemented until
 
 ---
 
-Last updated: 2026-03-08 (3:16 AM EST)
-Session duration: ~25 min
-Research: OPSDC + Reasoning Theater → 1 feature shipped, 1 arc fix
+## Daily Standup — 2026-03-09, 3:17 AM
+
+### ✅ Completed Today
+
+#### Quality-Aware Arc Prompting (#33) — SHIPPED & CLOSED
+**Research:** A-MAC — Adaptive Memory Admission Control (arxiv 2603.05549)
+**Key insight:** "Content type prior is the most influential factor"
+
+**Problem diagnosed:**
+- Current arc injection is passive — all events get the same arc listing
+- High-uncertainty events should get proactive arc suggestions
+- Arcs weren't getting closed because prompts didn't highlight opportunities
+
+**What shipped (commit 9769d8a):**
+- [x] `_get_pending_arcs_structured()` — Returns arcs as dicts for programmatic use
+- [x] `_get_proactive_arc_suggestions(event_type, ctx)` — Context-aware arc matching
+  - Triggers for high-uncertainty events (>=0.6)
+  - Extracts context: party Pokemon, battle dialogue, event keywords
+  - Matches arcs: Pokemon names, promise keywords (clutch, trainer, rematch)
+  - IMMEDIATE arcs always suggested
+- [x] Generates "🎯 ARC OPPORTUNITY DETECTED" prompt block:
+  - Matched arc details with urgency
+  - Suggested GM command from promise
+  - Clear "CLOSE IT NOW" instruction
+- [x] Refactored `_get_pending_arcs()` to use structured method
+
+**Prompt differentiation:**
+| Event Uncertainty | Arc Treatment |
+|-------------------|---------------|
+| Low (<0.6) | Passive listing only |
+| High (>=0.6) | Proactive suggestions + context match |
+| IMMEDIATE arcs | Always suggested |
+
+**Expected impact:**
+- Reduced "none" rate on high-quality events
+- Arc closures at meaningful moments
+- Complements #30 (Instruction Fade-Out) and #25 (Drought Breaker)
+
+---
+
+### 📊 Research Applied (Mar 7-8 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| A-MAC (Adaptive Memory Admission) | 2603.05549 | Quality-Aware Arc Prompting (#33) — SHIPPED |
+| OPENDEV | 2603.05344 | Already applied in #30 |
+| From Spark to Fire | 2603.04474 | Noted (multi-agent error propagation) |
+| FlashAttention-4 | 2603.05451 | Noted (infrastructure-level) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 2 (9769d8a, 73ff44e)
+- **Code changes:** +167 lines / -23 lines
+- **Issues created:** 1 (#33)
+- **Issues closed:** 1 (#33, shipped same session)
+- **New methods:** 2 (`_get_pending_arcs_structured`, `_get_proactive_arc_suggestions`)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+Last updated: 2026-03-09 (3:17 AM EST)
+Session duration: ~35 min
+Research: A-MAC → 1 feature shipped
 
