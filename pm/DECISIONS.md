@@ -1140,4 +1140,83 @@ about the Charcoal reward on Mar 4.
 
 ---
 
-**Last Updated:** 2026-03-08 (3:16 AM EST)
+## 🔄 Work Log (2026-03-09)
+
+### Shipped: Quality-Aware Arc Prompting (#33)
+**Commit:** 9769d8a
+**Research alignment:** A-MAC — Adaptive Memory Admission Control (arxiv 2603.05549)
+
+#### Key Insight from A-MAC
+"Content type prior is the most influential factor" for memory admission decisions.
+Applied to Agentic Emerald: different event types should get different arc treatment.
+
+#### Problem Diagnosed
+Current arc injection is passive — all events get the same arc listing regardless of
+whether the event is a good opportunity to close an arc. High-uncertainty events
+(trainer battles, badges, close calls) should get proactive arc suggestions.
+
+#### Solution: Quality-Aware Arc Prompting
+Two new methods in daemon:
+
+**`_get_pending_arcs_structured()`**
+- Returns arcs as dicts: {arc_name, pokemon, status, promise, priority}
+- Enables programmatic arc matching
+
+**`_get_proactive_arc_suggestions(event_type, ctx)`**
+- Only triggers for high-uncertainty events (>=0.6)
+- Extracts context clues: party Pokemon, battle dialogue, event keywords
+- Matches against pending arcs using fuzzy matching:
+  - Pokemon name in party or dialogue
+  - Keywords (clutch, close_call, trainer, rematch) in promise
+  - IMMEDIATE arcs always suggested
+- Generates explicit "ARC OPPORTUNITY DETECTED" block:
+  - Matched arc details with urgency label
+  - Suggested GM command extracted from promise
+  - Clear "CLOSE IT NOW" action instruction
+
+#### Prompt Differentiation
+| Event Uncertainty | Arc Treatment |
+|-------------------|---------------|
+| Low (<0.6) | Passive listing only |
+| High (>=0.6) | Proactive suggestions + context match |
+| IMMEDIATE arcs | Always suggested regardless of uncertainty |
+
+#### Expected Impact
+- Reduced "none" rate on high-quality events
+- Arc closures happen at meaningful moments
+- Maren is prompted more explicitly when opportunities arise
+- Complements #30 (Instruction Fade-Out) and #25 (Drought Breaker)
+
+---
+
+### 📊 Research Applied (Mar 7-8 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| A-MAC (Adaptive Memory Admission) | 2603.05549 | Quality-Aware Arc Prompting (#33) — SHIPPED |
+| OPENDEV | 2603.05344 | Already applied in #30 |
+| From Spark to Fire (Error Cascades) | 2603.04474 | Noted (multi-agent error propagation) |
+| FlashAttention-4 | 2603.05451 | Noted (infrastructure-level) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (9769d8a)
+- **Code changes:** +167 lines / -23 lines
+- **Issues created:** 1 (#33)
+- **Issues closed:** 1 (#33, shipped same session)
+- **New methods:** 2 (`_get_pending_arcs_structured`, `_get_proactive_arc_suggestions`)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-09 (3:17 AM EST)
