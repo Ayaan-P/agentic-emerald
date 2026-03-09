@@ -1639,6 +1639,181 @@ class PokemonGM:
         except Exception:
             return None
     
+    def _get_pending_arcs_structured(self) -> list:
+        """
+        Extract pending arc payoffs from PLAYTHROUGH.md as structured dicts.
+
+        Returns list of dicts with: arc_name, pokemon, status, promise, priority
+        Used by _get_pending_arcs() for formatted injection and by
+        _get_proactive_arc_suggestions() for A-MAC quality-aware prompting.
+        """
+        playthrough = self.agent_memory_dir / 'PLAYTHROUGH.md'
+        pending = []
+
+        try:
+            if not playthrough.exists():
+                return []
+
+            text = playthrough.read_text()
+
+            in_ledger = False
+            header_seen = False
+            separator_seen = False
+
+            for line in text.split('\n'):
+                stripped = line.strip()
+
+                if stripped.startswith('## ARC LEDGER'):
+                    in_ledger = True
+                    continue
+
+                if in_ledger and stripped.startswith('## ') and 'ARC LEDGER' not in stripped:
+                    break
+
+                if not in_ledger:
+                    continue
+
+                if stripped.startswith('<!--'):
+                    continue
+
+                if '| Arc' in stripped and '| Status' in stripped:
+                    header_seen = True
+                    continue
+
+                if header_seen and not separator_seen and stripped.startswith('|') and '---' in stripped:
+                    separator_seen = True
+                    continue
+
+                if header_seen and separator_seen and stripped.startswith('|'):
+                    parts = [p.strip() for p in stripped.strip('|').split('|')]
+                    if len(parts) >= 4:
+                        arc_name  = parts[0].strip()
+                        pokemon   = parts[1].strip()
+                        status    = parts[2].strip().upper()
+                        promise   = parts[3].strip()
+                        priority  = parts[4].strip().upper() if len(parts) > 4 else 'MEDIUM'
+
+                        if status in ('PENDING', 'IMMEDIATE'):
+                            pending.append({
+                                'arc_name': arc_name,
+                                'pokemon': pokemon,
+                                'status': status,
+                                'promise': promise,
+                                'priority': priority,
+                            })
+        except Exception:
+            pass
+
+        return pending[:5]
+
+    def _get_proactive_arc_suggestions(self, event_type: str, ctx: dict) -> str:
+        """
+        Issue #33 — Quality-Aware Arc Prompting (A-MAC-inspired, arxiv 2603.05549).
+
+        For high-uncertainty events (trainer battles, badges, close calls), proactively
+        suggest which pending arcs could be closed by THIS specific event.
+
+        A-MAC research: "content type prior is the most influential factor" for memory admission.
+        Applied here: event type determines HOW arcs are presented, not just WHETHER.
+
+        Low-uncertainty events: passive arc listing (current behavior)
+        High-uncertainty events: active arc matching with specific suggestions
+
+        Returns: formatted suggestion block or empty string.
+        """
+        arcs = self._get_pending_arcs_structured()
+        if not arcs:
+            return ''
+
+        # Only do proactive suggestions for high-uncertainty events
+        uncertainty = self.score_event_uncertainty(event_type, ctx)
+        if uncertainty < 0.6:
+            return ''  # Low uncertainty — use passive injection instead
+
+        # Extract context clues from the event
+        context_pokemon = set()
+        context_keywords = set()
+
+        # From battle buffer (who fought, what happened)
+        buffer = ctx.get('buffer', [])
+        for event in buffer:
+            ev = event.get('event', '')
+            if ev == 'START':
+                context_keywords.add('battle')
+                if event.get('is_trainer'):
+                    context_keywords.add('trainer')
+                if event.get('is_rematch'):
+                    context_keywords.add('rematch')
+            elif ev == 'END':
+                if event.get('was_close'):
+                    context_keywords.add('close_call')
+                    context_keywords.add('clutch')
+
+        # From current party — who's in the team?
+        party = ctx.get('state', {}).get('party', [])
+        for p in party:
+            species = p.get('species', 0)
+            name = self.get_species_name(species).lower()
+            if name and not name.startswith('pokemon #'):
+                context_pokemon.add(name)
+
+        # From battle dialogue — look for Pokemon names mentioned
+        dialogue = ctx.get('battle_dialogue', [])
+        dialogue_text = ' '.join(dialogue[-20:]).lower()
+
+        # Match arcs to current context
+        matched_arcs = []
+        for arc in arcs:
+            arc_pokemon = arc['pokemon'].lower()
+            arc_promise = arc['promise'].lower()
+
+            # Check if arc's Pokemon is in current party or mentioned in battle
+            pokemon_match = (
+                arc_pokemon in context_pokemon or
+                arc_pokemon in dialogue_text or
+                any(arc_pokemon in p.lower() for p in context_pokemon)
+            )
+
+            # Check for keyword matches (close_call, trainer, etc.)
+            keyword_match = any(kw in arc_promise for kw in context_keywords)
+
+            # IMMEDIATE arcs are always suggested
+            is_immediate = arc['status'] == 'IMMEDIATE'
+
+            if pokemon_match or keyword_match or is_immediate:
+                matched_arcs.append(arc)
+
+        if not matched_arcs:
+            return ''
+
+        # Build proactive suggestion block
+        lines = []
+        lines.append('═══════════════════════════════════════════════════════')
+        lines.append('🎯 ARC OPPORTUNITY DETECTED — THIS EVENT MATCHES PENDING ARCS')
+        lines.append('═══════════════════════════════════════════════════════')
+        lines.append('')
+
+        for arc in matched_arcs:
+            urgency = '🔴 IMMEDIATE' if arc['status'] == 'IMMEDIATE' else '🟡 PENDING'
+            lines.append(f"{urgency} [{arc['priority']}]: {arc['arc_name']}")
+            lines.append(f"   Pokemon: {arc['pokemon']}")
+            lines.append(f"   Promise: {arc['promise']}")
+
+            # Extract GM command from promise if present
+            import re
+            gm_match = re.search(r'GM\.\w+\([^)]*\)', arc['promise'])
+            if gm_match:
+                lines.append(f"   → Suggested action: {gm_match.group(0)}")
+            lines.append('')
+
+        lines.append('This event is a strong candidate to close an arc.')
+        lines.append('If any arc matches the moment, CLOSE IT NOW. Include:')
+        lines.append('  ACTION: <GM.xxx>')
+        lines.append('  ARC_CLOSED: <arc name>')
+        lines.append('═══════════════════════════════════════════════════════')
+
+        return '\n'.join(lines)
+
     def _get_pending_arcs(self) -> list:
         """
         Extract pending arc payoffs from PLAYTHROUGH.md.
@@ -1660,59 +1835,19 @@ class PokemonGM:
             if not playthrough.exists():
                 return []
 
-            text = playthrough.read_text()
+            # Use the structured method and format for injection
+            structured_arcs = self._get_pending_arcs_structured()
+            for arc in structured_arcs:
+                urgency = '🔴 IMMEDIATE' if arc['status'] == 'IMMEDIATE' else '🟡 PENDING'
+                entry = f"{urgency} [{arc['priority']}] {arc['arc_name']} ({arc['pokemon']}): {arc['promise']}"
+                pending.append(entry)
 
-            # ── Primary: parse structured ARC LEDGER table ────────────────
-            # Find the ARC LEDGER section
-            in_ledger = False
-            header_seen = False
-            separator_seen = False
-
-            for line in text.split('\n'):
-                stripped = line.strip()
-
-                if stripped.startswith('## ARC LEDGER'):
-                    in_ledger = True
-                    continue
-
-                # Stop at next section heading
-                if in_ledger and stripped.startswith('## ') and 'ARC LEDGER' not in stripped:
-                    break
-
-                if not in_ledger:
-                    continue
-
-                # Skip HTML comments
-                if stripped.startswith('<!--'):
-                    continue
-
-                # Detect table header row (contains 'Arc' and 'Status')
-                if '| Arc' in stripped and '| Status' in stripped:
-                    header_seen = True
-                    continue
-
-                # Skip separator row (|---|---|...)
-                if header_seen and not separator_seen and stripped.startswith('|') and '---' in stripped:
-                    separator_seen = True
-                    continue
-
-                # Parse data rows
-                if header_seen and separator_seen and stripped.startswith('|'):
-                    parts = [p.strip() for p in stripped.strip('|').split('|')]
-                    if len(parts) >= 4:
-                        arc_name  = parts[0].strip()
-                        pokemon   = parts[1].strip()
-                        status    = parts[2].strip().upper()
-                        promise   = parts[3].strip()
-                        priority  = parts[4].strip().upper() if len(parts) > 4 else 'MEDIUM'
-
-                        if status in ('PENDING', 'IMMEDIATE'):
-                            urgency = '🔴 IMMEDIATE' if status == 'IMMEDIATE' else '🟡 PENDING'
-                            entry = f"{urgency} [{priority}] {arc_name} ({pokemon}): {promise}"
-                            pending.append(entry)
+            if pending:
+                return pending[:5]
 
             # ── Fallback: legacy freeform markers ─────────────────────────
-            if not pending:
+            text = playthrough.read_text()
+            if True:  # Always try fallback when no structured arcs found
                 markers = [
                     'IMMEDIATE PAYOFF:',
                     'PENDING PAYOFF:',
@@ -2624,9 +2759,18 @@ class PokemonGM:
                 label = "major event — full context" if is_major else "filtered by event type"
                 prompt += f"\n=== NARRATIVE HISTORY ({label}) ===\n{relevant_narrative}\n"
 
+        # Issue #33 — Quality-Aware Arc Prompting (A-MAC-inspired, arxiv 2603.05549)
+        # For high-uncertainty events, proactively suggest arc opportunities
+        # "Content type prior is the most influential factor" — A-MAC paper
+        proactive_arcs = self._get_proactive_arc_suggestions(event_type, ctx)
+        if proactive_arcs:
+            prompt += f"\n{proactive_arcs}\n"
+
         # HOT layer — Inject pending arc payoffs (things Maren has promised in PLAYTHROUGH.md)
+        # (Passive listing — always shown, supplements proactive suggestions for high-uncertainty events)
         pending_arcs = self._get_pending_arcs()
-        if pending_arcs:
+        if pending_arcs and not proactive_arcs:
+            # Only show passive list if we didn't already show proactive suggestions
             prompt += f"\n=== PENDING ARC PAYOFFS (you promised these in PLAYTHROUGH.md) ===\n"
             for arc in pending_arcs:
                 prompt += f"• {arc}\n"
