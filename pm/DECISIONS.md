@@ -1219,4 +1219,82 @@ Two new methods in daemon:
 
 ---
 
-**Last Updated:** 2026-03-09 (3:17 AM EST)
+## 🔄 Work Log (2026-03-10)
+
+### Shipped: Drift Detection System (#34)
+**Commit:** 97b9ac0
+**Research alignment:** SAHOO — Safeguarded Alignment for High-Order Optimization (arxiv 2603.06333)
+
+#### Problem Diagnosed
+Analysis of decisions.jsonl (130 entries) revealed **systematic passivity**:
+- EXPLORATION_SUMMARY: 97.3% none rate
+- BATTLE_SUMMARY: 84.0% none rate
+- Overall avg drought: 5.9
+
+Unlike Drought Breaker (#25) which tracks **consecutive** "none" responses, this is a
+**rolling window** problem. Maren gives occasional visible rewards but is systematically
+passive overall. The SAHOO paper introduces "Goal Drift Index" for detecting this pattern.
+
+#### Solution: Rolling Window Drift Detection
+New tracking variables:
+- `drift_history`: rolling list of decision types (visible/ev/none)
+- `DRIFT_WINDOW = 20`: analyze last 20 decisions
+- `DRIFT_THRESHOLD = 0.80`: warning at >80% invisible
+- `DRIFT_CRITICAL = 0.90`: critical at >90% invisible
+
+New method `_calculate_drift_score()`:
+- Calculates `drift_score = (none + ev) / total`
+- Returns severity: 'normal', 'warning', 'critical'
+- Includes breakdown: visible count, ev count, none count
+
+Prompt injection:
+- **CRITICAL (>90%):** Full intervention with drift statistics and forced correction
+- **WARNING (>80%):** Lighter nudge about trending toward passivity
+
+#### Difference from Existing Features
+| Feature | Tracks | Trigger |
+|---------|--------|---------|
+| Drought Breaker (#25) | Consecutive "none" | At 12+ consecutive |
+| Instruction Fade-Out (#30) | Consecutive "none" + events | At 4+ consecutive + 5+ drought |
+| **Drift Detection (#34)** | Rolling window rate | At 80%+ invisible in last 20 |
+
+#### Impact
+- Catches systematic passivity even when occasional rewards break consecutive streaks
+- More sophisticated signal than simple consecutive counting
+- Provides actionable statistics to the agent
+
+---
+
+### 📊 Research Applied (Mar 8-9 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| SAHOO (Goal Drift Index) | 2603.06333 | Drift Detection System (#34) — SHIPPED |
+| EpisTwin (Personal KG) | 2603.06290 | Noted (Dytto competitive intel) |
+| COLD-Steer | 2603.06495 | Noted (could apply to narrative tiers) |
+| Schema-Gated Agentic AI | 2603.06394 | Noted (relates to RewardValidator #24) |
+| A-MAC | 2603.05549 | Already applied in #33 |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (97b9ac0)
+- **Code changes:** +89 lines
+- **Issues created:** 1 (#34)
+- **Issues closed:** 1 (#34, shipped same session)
+- **New methods:** 1 (`_calculate_drift_score`)
+- **New tracking vars:** 4 (drift_history, DRIFT_WINDOW, DRIFT_THRESHOLD, DRIFT_CRITICAL)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-10 (3:15 AM EST)
