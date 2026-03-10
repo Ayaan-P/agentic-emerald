@@ -1021,6 +1021,16 @@ class PokemonGM:
         # Research shows reasoning models often produce "performative" CoT that wastes tokens
         # without changing the answer. For low-uncertainty events, request abbreviated format.
         self.CONCISE_MODE_THRESHOLD = 0.4   # Uncertainty below this → request concise response
+
+        # Issue #34 — Drift Detection System (SAHOO paper, arxiv 2603.06333)
+        # SAHOO introduces "Goal Drift Index" to detect when agent behavior drifts from purpose.
+        # Unlike Drought Breaker (consecutive tracking), this monitors the rolling "none" rate
+        # across all recent decisions. High drift = Maren is systematically passive.
+        # Triggered when: rolling_none_rate exceeds threshold over DRIFT_WINDOW decisions.
+        self.DRIFT_WINDOW = 20            # Analyze last N decisions for drift
+        self.DRIFT_THRESHOLD = 0.80       # Alert if >80% of recent decisions are "none"
+        self.DRIFT_CRITICAL = 0.90        # Escalate at >90% none rate
+        self.drift_history = []           # Recent decisions: 'visible', 'ev', 'none'
         
         # Battle tracking
         self.battle_history = []
@@ -1578,6 +1588,51 @@ class PokemonGM:
             return 'ev'
         # Everything else is visible or impactful
         return 'visible'
+
+    def _calculate_drift_score(self) -> dict:
+        """
+        Issue #34 — Drift Detection System (SAHOO paper, arxiv 2603.06333).
+        
+        Calculate the "Goal Drift Index" — how much Maren's behavior has drifted
+        from her purpose (making the game feel alive).
+        
+        Unlike Drought Breaker (consecutive), this measures the rolling "none" rate
+        across recent decisions. A high none rate indicates systematic passivity.
+        
+        Returns: dict with drift_score, severity, and breakdown by event type
+        """
+        window = self.drift_history[-self.DRIFT_WINDOW:] if self.drift_history else []
+        
+        if len(window) < 5:
+            # Not enough data for meaningful drift detection
+            return {'drift_score': 0.0, 'severity': 'none', 'count': len(window)}
+        
+        # Calculate overall none rate
+        none_count = sum(1 for r in window if r == 'none')
+        ev_count = sum(1 for r in window if r == 'ev')
+        visible_count = sum(1 for r in window if r == 'visible')
+        total = len(window)
+        
+        # EVs count as "invisible" from the player's perspective
+        invisible_count = none_count + ev_count
+        drift_score = invisible_count / total
+        
+        # Determine severity
+        if drift_score >= self.DRIFT_CRITICAL:
+            severity = 'critical'
+        elif drift_score >= self.DRIFT_THRESHOLD:
+            severity = 'warning'
+        else:
+            severity = 'normal'
+        
+        return {
+            'drift_score': round(drift_score, 3),
+            'severity': severity,
+            'count': total,
+            'none': none_count,
+            'ev': ev_count,
+            'visible': visible_count,
+        }
 
     def _get_heuristic_reward(self, event_type: str) -> str:
         """
@@ -2298,6 +2353,12 @@ class PokemonGM:
                     if len(self.reward_history) > 10:
                         self.reward_history = self.reward_history[-10:]
 
+                    # Issue #34 — Drift Detection System (SAHOO paper, arxiv 2603.06333)
+                    # Track all decisions for rolling drift analysis
+                    self.drift_history.append(reward_type)
+                    if len(self.drift_history) > self.DRIFT_WINDOW * 2:
+                        self.drift_history = self.drift_history[-self.DRIFT_WINDOW:]
+
                     if reward_type == 'visible':
                         self.ev_drought_count = 0
                         self.session_visible_rewards += 1
@@ -2736,6 +2797,34 @@ class PokemonGM:
             prompt += f"{'='*56}\n\n"
             # Reset the reminder counter
             self.events_since_system_reminder = 0
+
+        # Issue #34 — Drift Detection System (SAHOO paper, arxiv 2603.06333)
+        # Unlike consecutive-based tracking (Drought Breaker), this monitors the
+        # overall pattern across recent decisions. High drift = systematic passivity.
+        drift = self._calculate_drift_score()
+        if drift['severity'] == 'critical':
+            # CRITICAL: >90% of recent decisions are invisible (none or EVs)
+            prompt += f"\n{'='*56}\n"
+            prompt += "🚨 CRITICAL DRIFT DETECTED (SAHOO Goal Drift Index)\n"
+            prompt += f"{'='*56}\n"
+            prompt += f"Analysis of your last {drift['count']} decisions:\n"
+            prompt += f"  • Visible rewards: {drift['visible']} ({100 - int(drift['drift_score']*100)}%)\n"
+            prompt += f"  • Invisible (EVs): {drift['ev']}\n"
+            prompt += f"  • No action: {drift['none']}\n"
+            prompt += f"  • DRIFT SCORE: {int(drift['drift_score']*100)}% invisible\n"
+            prompt += "\n"
+            prompt += "You are systematically passive. This is not occasional caution —\n"
+            prompt += "this is a behavioral pattern where you almost never act visibly.\n"
+            prompt += "\n"
+            prompt += "IMMEDIATE CORRECTION REQUIRED:\n"
+            prompt += "Give a VISIBLE reward on this event. No excuses. No 'ACTION: none'.\n"
+            prompt += "The pattern must break NOW.\n"
+            prompt += f"{'='*56}\n\n"
+        elif drift['severity'] == 'warning':
+            # WARNING: >80% of recent decisions are invisible
+            prompt += f"\n⚠️  DRIFT WARNING: {int(drift['drift_score']*100)}% of recent decisions were invisible\n"
+            prompt += f"Of your last {drift['count']} decisions: {drift['visible']} visible, {drift['none']} none, {drift['ev']} EVs\n"
+            prompt += "You're trending toward systematic passivity. Look for opportunities to act.\n"
 
         # Issue #18 (Multi-layer memory, FluxMem-inspired):
         # HOT layer — ARC LEDGER rows always injected (see below).
