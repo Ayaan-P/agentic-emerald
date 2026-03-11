@@ -1535,12 +1535,12 @@ class PokemonGM:
             # Wild battle, close call → medium uncertainty
             return 0.5
         
-        # Exploration summaries — medium uncertainty
+        # Issue #35 — Exploration Pre-filtering (data-driven, arxiv decision analysis)
+        # Analysis of decisions.jsonl showed 97% none rate on EXPLORATION_SUMMARY.
+        # Most exploration events are truly routine and don't warrant agent reasoning.
+        # Only invoke agent when exploration has narrative potential.
         if event_type == 'EXPLORATION_SUMMARY':
-            summary = context.get('summary', '')
-            if 'rare' in summary.lower() or 'caught' in summary.lower():
-                return 0.8
-            return 0.3
+            return self._score_exploration_uncertainty(context)
         
         # Unknown events — medium uncertainty
         return 0.5
@@ -1633,6 +1633,73 @@ class PokemonGM:
             'ev': ev_count,
             'visible': visible_count,
         }
+
+    def _score_exploration_uncertainty(self, context: dict) -> float:
+        """
+        Issue #35 — Exploration Pre-filtering (data-driven optimization).
+        
+        Analysis of decisions.jsonl showed 97% none rate on EXPLORATION_SUMMARY.
+        Most exploration events are truly routine and don't warrant agent reasoning:
+        - Collecting prize money
+        - Using repels
+        - Talking to random NPCs
+        - Surfing between routes
+        
+        Only invoke agent when exploration has genuine narrative potential:
+        - Party composition changed (Pokemon deposited/withdrawn)
+        - Large item gain (>5 items — stocking up)
+        - Significant money event (>$10k gain/loss)
+        - Pending arcs mention exploration-related triggers
+        - High drought (Maren needs to act SOMEWHERE)
+        
+        Returns: uncertainty score (0-1). Below threshold = skip agent.
+        """
+        state = context.get('state', {})
+        summary = context.get('summary', '').lower()
+        
+        score = 0.0  # Start with lowest (routine)
+        
+        # RARE/CAUGHT keywords — always high (original behavior)
+        if 'rare' in summary or 'caught' in summary:
+            return 0.9
+        
+        # Party composition change — deposit/withdrawal has narrative weight
+        # Check if party size changed from last known state
+        current_party = state.get('party', [])
+        current_party_size = len([p for p in current_party if p.get('species', 0) > 0])
+        if hasattr(self, '_last_party_size') and current_party_size != self._last_party_size:
+            score = max(score, 0.7)  # Party change is significant
+        self._last_party_size = current_party_size
+        
+        # Large item gain — stocking up for something important
+        items_gained = state.get('itemsGained', 0)
+        if items_gained >= 5:
+            score = max(score, 0.5)  # Notable item gain
+        
+        # Large money event — $10k+ is significant
+        money_change = abs(state.get('moneyChange', 0))
+        if money_change >= 10000:
+            score = max(score, 0.4)  # Big financial event
+        
+        # High drought — Maren hasn't acted in a while, any event could be the one
+        if self.ev_drought_count >= self.DROUGHT_WARNING_THRESHOLD:
+            score = max(score, 0.6)  # Drought pressure elevates importance
+        
+        # Critical drift — agent is systematically passive, force more invocations
+        drift = self._calculate_drift_score()
+        if drift.get('severity') == 'critical':
+            score = max(score, 0.5)
+        
+        # Pending IMMEDIATE arcs — always be ready to close them
+        arcs = self._get_pending_arcs_structured()
+        has_immediate = any(a['status'] == 'IMMEDIATE' for a in arcs)
+        if has_immediate:
+            score = max(score, 0.5)
+        
+        # If no special factors, exploration is routine (low uncertainty)
+        # Default: 0.0 which is below threshold (0.15), so agent will be skipped
+        # But to allow occasional sampling, give a baseline of 0.1
+        return max(score, 0.1)
 
     def _get_heuristic_reward(self, event_type: str) -> str:
         """
