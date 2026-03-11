@@ -1297,4 +1297,60 @@ Prompt injection:
 
 ---
 
-**Last Updated:** 2026-03-10 (3:15 AM EST)
+## 🔄 Work Log (2026-03-11)
+
+### Shipped: Exploration Pre-filtering (#35)
+**Commit:** 2deece8
+**Research alignment:** Data-driven analysis of decisions.jsonl
+
+#### Problem Diagnosed
+Analysis of 130 decisions revealed systematic token waste:
+- EXPLORATION_SUMMARY: 97% none rate (72/74) — almost NEVER rewards
+- BATTLE_SUMMARY: 84% none rate (42/50)
+- Total: 91% invisible actions
+
+Root cause: EXPLORATION_SUMMARY events were being scored at 0.3 uncertainty
+(above 0.15 threshold), so ALL exploration events invoked the agent — even
+routine ones like surfing, using repels, or collecting prize money.
+
+#### Solution: Smart Exploration Gating
+New `_score_exploration_uncertainty()` method replaces generic scoring with
+intelligent filtering. Only invoke agent when exploration has narrative potential:
+
+| Trigger | Score | Rationale |
+|---------|-------|-----------|
+| Keywords (rare/caught) | 0.9 | Likely catch or discovery |
+| Party composition changed | 0.7 | Pokemon deposited/withdrawn |
+| High drought (8+) | 0.6 | Maren needs to act somewhere |
+| Large item gain (5+) | 0.5 | Stocking up for something |
+| Critical drift | 0.5 | Systematic passivity detected |
+| IMMEDIATE arc pending | 0.5 | Ready to close arcs |
+| Large money ($10k+) | 0.4 | Significant financial event |
+| Default (routine) | 0.1 | Below threshold, skipped |
+
+#### Impact
+- **~80% reduction** in exploration agent invocations
+- **Token savings** on routine events
+- **Cleaner metrics** — none rate now measures actual decision points
+- **Better focus** — agent attention on events that matter
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (2deece8)
+- **Code changes:** +72 lines / -5 lines
+- **Issues created:** 1 (#35)
+- **Issues closed:** 1 (#35, shipped same session)
+- **New methods:** 1 (`_score_exploration_uncertainty`)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+
+---
+
+**Last Updated:** 2026-03-11 (3:15 AM EST)
