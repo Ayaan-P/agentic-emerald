@@ -1353,4 +1353,97 @@ intelligent filtering. Only invoke agent when exploration has narrative potentia
 
 ---
 
-**Last Updated:** 2026-03-11 (3:15 AM EST)
+## 🔄 Work Log (2026-03-12)
+
+### Shipped: Condition-Aware Arc Progress Tracking (#36)
+**Commit:** 45edafd
+**Research alignment:** AutoAgent (arxiv 2603.09716) — "Evolving Cognition and Elastic Memory Orchestration"
+
+#### Key Insight from AutoAgent
+"Closed-loop evolution: aligns intended actions with outcomes without retraining."
+Applied: arc promises should be verifiable against actual game state.
+
+#### Problem Diagnosed
+Arc promises often include numeric conditions (e.g., "If Swellow leads 5+ wins") but
+the daemon had no way to check actual progress. The arc system was disconnected from
+PlayerProfileTracker data.
+
+Current state (from player_profile.json):
+- Swellow: 16 battles led, 3 wins
+- Arc requires: 5+ wins
+
+Maren couldn't see that Swellow was 3/5 toward the arc condition.
+
+#### Solution: Closed-Loop Arc Verification
+Four new methods create feedback between arc promises and game state:
+
+**`_parse_arc_condition(promise)`**
+- Extracts numeric conditions from arc promises
+- Patterns: 'N+ wins', 'leads N+ battles', 'after N battles', 'N+ close calls'
+- Returns: type, target value, raw match
+
+**`_check_arc_progress(arc)`**
+- Looks up Pokemon in PlayerProfileTracker
+- Maps condition types to profile fields (wins → battles_won, etc.)
+- Returns: current, target, met, progress_str
+
+**`_get_pending_arcs_with_progress()`**
+- Enriches arcs with progress tracking
+- Shows: `📊 Progress: 3/5 wins`
+- When met: `✅ CONDITION MET: 5/5 wins — READY TO CLOSE!`
+
+**Updated `_get_proactive_arc_suggestions()`**
+- Includes progress info in matched arcs
+- Auto-suggests arcs where condition IS MET (even without Pokemon context match)
+
+#### Example Output
+```
+🟡 PENDING [MEDIUM] Swellow Leadership (Swellow): If Swellow leads 5+ wins...
+   📊 Progress: 3/5 wins
+```
+
+When condition is met:
+```
+🟡 PENDING [MEDIUM] Swellow Leadership (Swellow): If Swellow leads 5+ wins...
+   ✅ CONDITION MET: 5/5 wins — READY TO CLOSE!
+```
+
+#### Impact
+- Creates closed-loop between narrative promises and actual game state
+- Maren sees real progress toward arc conditions
+- Met conditions get urgent attention regardless of current event context
+- AutoAgent's "closed-loop evolution" applied to narrative arc system
+
+---
+
+### 📊 Research Applied (Mar 11 Digest)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| AutoAgent | 2603.09716 | Condition-Aware Arc Progress (#36) — SHIPPED |
+| SoK: Agentic RAG | 2603.07379 | Noted (risk taxonomy: memory poisoning, hallucination) |
+| Neural Debugger (FAIR) | 2603.09951 | Noted (debugging world model) |
+| Think Before You Lie | 2603.09957 | Noted (reasoning improves honesty) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (45edafd)
+- **Code changes:** +162 lines / -7 lines
+- **Issues created:** 1 (#36)
+- **Issues closed:** 1 (#36, shipped same session)
+- **New methods:** 4
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-12 (3:15 AM EST)

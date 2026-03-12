@@ -1476,7 +1476,92 @@ All other arcs DELIVERED ✅
 
 ---
 
-Last updated: 2026-03-11 (3:15 AM EST)
-Session duration: ~25 min
-Research: Data-driven analysis → 1 feature shipped
+## Daily Standup — 2026-03-12, 3:15 AM
+
+### ✅ Completed Today
+
+#### Condition-Aware Arc Progress Tracking (#36) — SHIPPED & CLOSED
+**Research alignment:** AutoAgent (arxiv 2603.09716) — "Evolving Cognition and Elastic Memory Orchestration"
+**Key insight:** "Closed-loop evolution aligns intended actions with outcomes"
+
+**Problem diagnosed:**
+Arc promises often include numeric conditions like "If Swellow leads 5+ wins" but the daemon had no way to check actual progress. The arc system was disconnected from PlayerProfileTracker data.
+
+Current state: Swellow has 16 battles led, 3 wins — arc requires 5 wins.
+
+**What shipped (commit 45edafd):**
+- [x] `_parse_arc_condition(promise)` — Extracts numeric conditions from promises
+  - Patterns: 'N+ wins', 'leads N+ battles', 'after N battles', 'N+ close calls'
+- [x] `_check_arc_progress(arc)` — Looks up Pokemon in PlayerProfileTracker
+  - Maps condition types to profile fields (wins → battles_won)
+  - Returns current/target/met status
+- [x] `_get_pending_arcs_with_progress()` — Enriches arcs with progress info
+- [x] Updated `_get_pending_arcs()` to use progress-aware method
+- [x] Updated `_get_proactive_arc_suggestions()` to include progress and auto-suggest met conditions
+
+**Prompt injection changes:**
+- Shows progress: `📊 Progress: 3/5 wins`
+- When condition MET: `✅ CONDITION MET: 5/5 wins — READY TO CLOSE!`
+- Arcs with met conditions auto-suggested even without Pokemon context match
+
+**Example output:**
+```
+🟡 PENDING [MEDIUM] Swellow Leadership (Swellow): If Swellow leads 5+ wins...
+   📊 Progress: 3/5 wins
+```
+
+**Impact:**
+- Creates closed-loop between narrative promises and actual game state
+- Maren sees real progress toward arc conditions
+- Met conditions get urgent attention regardless of current event
+- AutoAgent's "closed-loop evolution" applied to narrative arc system
+
+---
+
+### 📊 Research Applied (Mar 11 Digest)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| AutoAgent (Elastic Memory) | 2603.09716 | Condition-Aware Arc Progress (#36) — SHIPPED |
+| SoK: Agentic RAG | 2603.07379 | Noted (risk taxonomy: memory poisoning, hallucination propagation) |
+| Neural Debugger (FAIR) | 2603.09951 | Noted (debugging world model for code) |
+| Think Before You Lie | 2603.09957 | Noted (reasoning improves honesty) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (45edafd)
+- **Code changes:** +162 lines / -7 lines
+- **Issues created:** 1 (#36)
+- **Issues closed:** 1 (#36, shipped same session)
+- **New methods:** 4 (_parse_arc_condition, _check_arc_progress, _get_pending_arcs_with_progress, updates to existing)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🔍 Observations
+
+#### Arc Ledger Status
+- 4 arcs DELIVERED ✅
+- 1 arc PENDING: Swellow Leadership (3/5 wins — now shows progress!)
+
+#### Open Issues
+- **#31** — Performative CoT Detection (research)
+- **#27** — Mega Evolution Sprite Injection (WIP)
+- **#22** — State-machine narrative tiers (MEDIUM)
+- **#11** — Fire Red/Leaf Green (future)
+- **#1** — Gen 1 Support (blocked)
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+Last updated: 2026-03-12 (3:15 AM EST)
+Session duration: ~30 min
+Research: AutoAgent "closed-loop evolution" → 1 feature shipped
 
