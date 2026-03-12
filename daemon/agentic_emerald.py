@@ -1828,6 +1828,146 @@ class PokemonGM:
 
         return pending[:5]
 
+    def _parse_arc_condition(self, promise: str) -> dict:
+        """
+        Issue #36 — Condition-Aware Arc Escalation (AutoAgent-inspired, arxiv 2603.09716).
+        
+        Parse numeric conditions from arc promises to enable closed-loop verification.
+        AutoAgent's "closed-loop evolution" aligns intended actions with outcomes.
+        
+        Examples:
+            "If Swellow leads 5+ wins" → {'type': 'wins', 'target': 5, 'pokemon': 'Swellow'}
+            "3+ battles with Blaziken leading" → {'type': 'battles_led', 'target': 3}
+            "After 10 battles" → {'type': 'battles', 'target': 10}
+        
+        Returns: dict with 'type', 'target', and optional context, or empty dict if no condition.
+        """
+        import re
+        
+        # Pattern: "N+" or "N +" followed by keyword
+        patterns = [
+            # "5+ wins" or "leads 5+ wins"
+            (r'(\d+)\+?\s*wins?', 'wins'),
+            # "leads 5+ battles" or "5+ battles leading"
+            (r'(\d+)\+?\s*battles?\s*(?:led|leading)', 'battles_led'),
+            (r'leads?\s*(\d+)\+?\s*(?:battles?|wins?)', 'battles_led'),
+            # "after N battles"
+            (r'after\s*(\d+)\+?\s*battles?', 'battles'),
+            # "N+ close calls"
+            (r'(\d+)\+?\s*close\s*calls?', 'close_calls'),
+        ]
+        
+        promise_lower = promise.lower()
+        
+        for pattern, condition_type in patterns:
+            match = re.search(pattern, promise_lower)
+            if match:
+                target = int(match.group(1))
+                return {
+                    'type': condition_type,
+                    'target': target,
+                    'raw_match': match.group(0)
+                }
+        
+        return {}
+
+    def _check_arc_progress(self, arc: dict) -> dict:
+        """
+        Issue #36 — Condition-Aware Arc Escalation (AutoAgent-inspired, arxiv 2603.09716).
+        
+        Check arc condition against PlayerProfileTracker to determine progress.
+        Creates closed-loop between arc promises and actual game state.
+        
+        Args:
+            arc: dict from _get_pending_arcs_structured() with arc_name, pokemon, promise, etc.
+        
+        Returns: dict with:
+            - 'has_condition': bool
+            - 'current': int (current value from profile)
+            - 'target': int (target from promise)
+            - 'met': bool (current >= target)
+            - 'progress_str': str (e.g., "3/5 wins")
+        """
+        condition = self._parse_arc_condition(arc.get('promise', ''))
+        
+        if not condition:
+            return {'has_condition': False}
+        
+        pokemon_name = arc.get('pokemon', '').lower()
+        condition_type = condition['type']
+        target = condition['target']
+        
+        # Look up Pokemon in player profile
+        profile = self.player_profile.profile
+        trust = profile.get('pokemon_trust', {})
+        
+        # Find matching Pokemon (case-insensitive)
+        current = 0
+        matched_pokemon = None
+        
+        for species_id, data in trust.items():
+            if data.get('name', '').lower() == pokemon_name:
+                matched_pokemon = data
+                break
+        
+        if matched_pokemon:
+            if condition_type == 'wins':
+                current = matched_pokemon.get('battles_won', 0)
+            elif condition_type in ('battles_led', 'battles'):
+                current = matched_pokemon.get('battles_led', 0)
+        
+        met = current >= target
+        
+        # Build progress string
+        if condition_type == 'wins':
+            progress_str = f"{current}/{target} wins"
+        elif condition_type in ('battles_led', 'battles'):
+            progress_str = f"{current}/{target} battles"
+        elif condition_type == 'close_calls':
+            progress_str = f"{current}/{target} close calls"
+        else:
+            progress_str = f"{current}/{target}"
+        
+        return {
+            'has_condition': True,
+            'current': current,
+            'target': target,
+            'met': met,
+            'progress_str': progress_str,
+            'condition_type': condition_type,
+        }
+
+    def _get_pending_arcs_with_progress(self) -> list:
+        """
+        Issue #36 — Condition-Aware Arc Escalation (AutoAgent-inspired, arxiv 2603.09716).
+        
+        Get pending arcs enriched with progress tracking from PlayerProfileTracker.
+        For arcs with numeric conditions, includes current progress (e.g., "3/5 wins").
+        For arcs where condition IS met, marks them for urgent attention.
+        
+        Returns: list of formatted strings with arc info + progress
+        """
+        arcs = self._get_pending_arcs_structured()
+        result = []
+        
+        for arc in arcs:
+            progress = self._check_arc_progress(arc)
+            
+            urgency = '🔴 IMMEDIATE' if arc['status'] == 'IMMEDIATE' else '🟡 PENDING'
+            base = f"{urgency} [{arc['priority']}] {arc['arc_name']} ({arc['pokemon']}): {arc['promise']}"
+            
+            if progress.get('has_condition'):
+                if progress['met']:
+                    # Condition MET — elevate urgency
+                    base += f"\n   ✅ CONDITION MET: {progress['progress_str']} — READY TO CLOSE!"
+                else:
+                    # Show progress toward condition
+                    base += f"\n   📊 Progress: {progress['progress_str']}"
+            
+            result.append(base)
+        
+        return result[:5]
+
     def _get_proactive_arc_suggestions(self, event_type: str, ctx: dict) -> str:
         """
         Issue #33 — Quality-Aware Arc Prompting (A-MAC-inspired, arxiv 2603.05549).
@@ -1901,8 +2041,13 @@ class PokemonGM:
 
             # IMMEDIATE arcs are always suggested
             is_immediate = arc['status'] == 'IMMEDIATE'
+            
+            # Issue #36 — Arcs with MET conditions are always suggested
+            # If the player has earned this arc, we should be looking to close it
+            progress = self._check_arc_progress(arc)
+            condition_met = progress.get('met', False)
 
-            if pokemon_match or keyword_match or is_immediate:
+            if pokemon_match or keyword_match or is_immediate or condition_met:
                 matched_arcs.append(arc)
 
         if not matched_arcs:
@@ -1916,10 +2061,20 @@ class PokemonGM:
         lines.append('')
 
         for arc in matched_arcs:
+            # Issue #36 — Include progress info from PlayerProfileTracker
+            progress = self._check_arc_progress(arc)
+            
             urgency = '🔴 IMMEDIATE' if arc['status'] == 'IMMEDIATE' else '🟡 PENDING'
             lines.append(f"{urgency} [{arc['priority']}]: {arc['arc_name']}")
             lines.append(f"   Pokemon: {arc['pokemon']}")
             lines.append(f"   Promise: {arc['promise']}")
+            
+            # Show progress if arc has numeric condition
+            if progress.get('has_condition'):
+                if progress['met']:
+                    lines.append(f"   ✅ CONDITION MET: {progress['progress_str']} — READY TO CLOSE!")
+                else:
+                    lines.append(f"   📊 Progress: {progress['progress_str']}")
 
             # Extract GM command from promise if present
             import re
@@ -1942,6 +2097,9 @@ class PokemonGM:
 
         Primary: parses the structured ## ARC LEDGER markdown table.
         Rows with Status = PENDING or IMMEDIATE are returned as clear instructions.
+        
+        Issue #36 — Now includes progress tracking from PlayerProfileTracker.
+        For arcs with numeric conditions (e.g., "5+ wins"), shows current progress.
 
         Fallback: keyword scan for legacy freeform arc markers (pre-ledger format).
 
@@ -1957,12 +2115,9 @@ class PokemonGM:
             if not playthrough.exists():
                 return []
 
-            # Use the structured method and format for injection
-            structured_arcs = self._get_pending_arcs_structured()
-            for arc in structured_arcs:
-                urgency = '🔴 IMMEDIATE' if arc['status'] == 'IMMEDIATE' else '🟡 PENDING'
-                entry = f"{urgency} [{arc['priority']}] {arc['arc_name']} ({arc['pokemon']}): {arc['promise']}"
-                pending.append(entry)
+            # Issue #36 — Use progress-aware method (AutoAgent-inspired closed-loop)
+            # This enriches arcs with actual progress from PlayerProfileTracker
+            pending = self._get_pending_arcs_with_progress()
 
             if pending:
                 return pending[:5]
