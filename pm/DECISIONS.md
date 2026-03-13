@@ -1446,4 +1446,98 @@ When condition is met:
 
 ---
 
-**Last Updated:** 2026-03-12 (3:15 AM EST)
+## 🔄 Work Log (2026-03-13)
+
+### Shipped: Trajectory Learning System (#37)
+**Commit:** 55cd807
+**Research alignment:** IBM arxiv 2603.10600 — "Trajectory-Informed Memory Generation for Self-Improving Agent Systems"
+
+#### Key Insight from IBM Paper
+"Four components: Trajectory Intelligence Extractor, Decision Attribution Analyzer,
+Contextual Learning Generator, Adaptive Memory Retrieval."
+Applied: extract strategic insights from decisions.jsonl and inject as learned strategies.
+
+#### Problem Diagnosed
+The DecisionLogger (#20) collects 130+ decisions but Maren never **learns** from them.
+Pattern analysis shows:
+- EXPLORATION_SUMMARY: 97% none rate (72/74) — massively underused
+- BATTLE_SUMMARY: 84% none rate (42/50)
+- BADGE_OBTAINED: 67% none rate (4/6)
+- 2 arc closures successful (teachMove on Lombre and Combusken)
+
+Maren has empirical evidence of what works but no way to see it.
+
+#### Solution: TrajectoryLearner Class
+New class with three components:
+
+**Trajectory Intelligence Extraction:**
+- Analyzes decisions.jsonl for event type effectiveness (none rate per type)
+- Tracks drought recovery patterns (what actions broke high droughts)
+- Counts successful arc closures
+- Calculates average drought at visible reward
+
+**Contextual Learning Generator:**
+Produces five types of strategic tips:
+| Tip Type | Trigger | Example |
+|----------|---------|---------|
+| 📊 UNDERUSED | >95% none rate | "EXPLORATION_SUMMARY has 97% none rate — opportunities" |
+| 🔧 RECOVERY | Drought breaks found | "GM.give broke drought 3x in past sessions" |
+| ⏱️ TIMING | Avg drought > 0 | "Visible rewards at drought 4.2 — consider acting earlier" |
+| 🎯 ARCS | Arc closures exist | "2 arc closures successful — explicit payoffs work" |
+| 🎲 THIS EVENT | Context-specific | "BATTLE_SUMMARY only 16% visible rate — break the pattern" |
+
+**Adaptive Memory Retrieval:**
+- Caches analysis for 1 hour (not every prompt)
+- Only activates after 30+ decisions (MIN_ENTRIES threshold)
+- Injects event-specific tips based on current event type
+
+**Prompt injection example:**
+```
+=== LEARNED STRATEGIES (from your past decisions) ===
+📊 UNDERUSED: EXPLORATION_SUMMARY has 97% none rate — these events are opportunities
+🎯 ARCS: 2 arc closures successful — explicit payoffs work
+🎲 THIS EVENT: BATTLE_SUMMARY only gets visible rewards 16% of the time — break the pattern
+Use these insights. They come from what actually worked before.
+=== END LEARNED STRATEGIES ===
+```
+
+#### Impact
+- Makes Maren's learning visible and actionable
+- Builds on DecisionLogger (#20) data collection
+- Complements Learning Directives (#23) with empirical insights
+- +14.3pp gains on AppWorld in IBM paper — applicable here
+
+---
+
+### 📊 Research Applied (Mar 11-12 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| Trajectory-Informed Memory Generation | 2603.10600 | Trajectory Learning System (#37) — SHIPPED |
+| Nurture-First Agent Development | 2603.10808 | Noted (Knowledge Crystallization Cycle for Dytto) |
+| LLM2Vec-Gen | 2603.10913 | Noted (generative embeddings — Dytto context retrieval) |
+| SoK: Agentic RAG | 2603.07379 | Noted (risk taxonomy, already applied) |
+| AutoAgent | 2603.09716 | Already applied in #36 |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (55cd807)
+- **Code changes:** +165 lines
+- **Issues created:** 1 (#37)
+- **Issues closed:** 1 (#37, shipped same session)
+- **New classes:** 1 (TrajectoryLearner)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-13 (3:15 AM EST)

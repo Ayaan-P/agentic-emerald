@@ -1561,7 +1561,112 @@ Current state: Swellow has 16 battles led, 3 wins — arc requires 5 wins.
 
 ---
 
-Last updated: 2026-03-12 (3:15 AM EST)
-Session duration: ~30 min
-Research: AutoAgent "closed-loop evolution" → 1 feature shipped
+## Daily Standup — 2026-03-13, 3:15 AM
+
+### ✅ Completed Today
+
+#### Trajectory Learning System (#37) — SHIPPED & CLOSED
+**Research:** IBM arxiv 2603.10600 — "Trajectory-Informed Memory Generation for Self-Improving Agent Systems"
+**Commit:** 55cd807
+
+**Problem diagnosed:**
+The DecisionLogger (#20) has 130+ decisions logged but Maren never **learns** from them:
+- EXPLORATION_SUMMARY: 97% none rate (72/74)
+- BATTLE_SUMMARY: 84% none rate (42/50)
+- BADGE_OBTAINED: 67% none rate (4/6)
+- 2 successful arc closures (Lombre, Combusken)
+
+Empirical evidence exists but isn't visible to Maren.
+
+**What shipped:**
+- [x] `TrajectoryLearner` class with three components:
+
+**Trajectory Intelligence Extraction:**
+- Analyzes decisions.jsonl for event type effectiveness
+- Tracks drought recovery patterns
+- Counts successful arc closures
+- Calculates avg drought at visible reward
+
+**Contextual Learning Generator:**
+| Tip Type | Trigger | Purpose |
+|----------|---------|---------|
+| 📊 UNDERUSED | >95% none rate | Flag missed opportunities |
+| 🔧 RECOVERY | Drought breaks | Show what worked |
+| ⏱️ TIMING | Avg drought > 0 | When to act |
+| 🎯 ARCS | Arc closures | Confirm payoffs work |
+| 🎲 THIS EVENT | Context-specific | Break patterns |
+
+**Adaptive Memory Retrieval:**
+- Caches analysis for 1 hour (not every prompt)
+- Only activates after 30+ decisions
+- Event-specific tips based on current event type
+
+**Example output:**
+```
+=== LEARNED STRATEGIES (from your past decisions) ===
+📊 UNDERUSED: EXPLORATION_SUMMARY has 97% none rate — these events are opportunities
+🎯 ARCS: 2 arc closures successful — explicit payoffs work
+🎲 THIS EVENT: BATTLE_SUMMARY only gets visible rewards 16% — break the pattern
+Use these insights. They come from what actually worked before.
+=== END LEARNED STRATEGIES ===
+```
+
+**Impact:**
+- Makes Maren's learning visible and actionable
+- Builds on DecisionLogger (#20) data collection
+- Complements Learning Directives (#23) with empirical insights
+
+---
+
+### 📊 Research Applied (Mar 11-12 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| Trajectory-Informed Memory | 2603.10600 | Trajectory Learning System (#37) — SHIPPED |
+| Nurture-First Agent Dev | 2603.10808 | Noted (Knowledge Crystallization for Dytto) |
+| LLM2Vec-Gen | 2603.10913 | Noted (generative embeddings) |
+| SoK: Agentic RAG | 2603.07379 | Noted (risk taxonomy) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (55cd807)
+- **Code changes:** +165 lines
+- **Issues created:** 1 (#37)
+- **Issues closed:** 1 (#37, shipped same session)
+- **New classes:** 1 (TrajectoryLearner)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🔍 Observations
+
+#### decisions.jsonl Analysis (130 entries)
+- Total decisions: 130
+- Visible: 12 (9.2%)
+- None: 118 (90.8%)
+- Arc closures: 2 (both successful teachMove rewards)
+
+The data shows Maren acts when arcs are ready (visible at drought=0)
+but doesn't break long droughts proactively. TrajectoryLearner now
+surfaces this pattern.
+
+#### Open Issues
+- **#31** — Performative CoT Detection (research)
+- **#27** — Mega Evolution Sprite Injection (WIP)
+- **#22** — State-machine narrative tiers (MEDIUM)
+- **#11** — Fire Red/Leaf Green (future)
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+Last updated: 2026-03-13 (3:15 AM EST)
+Session duration: ~35 min
+Research: IBM "Trajectory-Informed Memory Generation" → 1 feature shipped
 
