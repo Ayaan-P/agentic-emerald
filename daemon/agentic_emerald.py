@@ -620,6 +620,158 @@ class DecisionLogger:
             return ''
 
 
+class TrajectoryLearner:
+    """
+    Issue #37 — Trajectory Learning System (IBM arxiv 2603.10600-inspired).
+
+    Analyzes decisions.jsonl to extract strategic insights that guide future decisions.
+    Based on "Trajectory-Informed Memory Generation for Self-Improving Agent Systems":
+    - Trajectory Intelligence Extractor: parses decision logs
+    - Contextual Learning Generator: produces strategy/recovery/optimization tips
+    - Adaptive Memory Retrieval: injects learned strategies into prompts
+
+    Output: structured "LEARNED STRATEGIES" block injected after player profile.
+    Only activates after MIN_ENTRIES decisions are logged.
+    """
+
+    MIN_ENTRIES = 30  # Need enough data for meaningful patterns
+    CACHE_TTL_SEC = 3600  # Re-analyze every hour (not every prompt)
+
+    def __init__(self, decisions_path: Path):
+        self.decisions_path = decisions_path
+        self._cache = None
+        self._cache_time = 0
+
+    def analyze(self) -> dict:
+        """
+        Extract strategic patterns from decisions.jsonl.
+        Returns dict with: event_patterns, drought_recovery, strategy_tips.
+        """
+        if not self.decisions_path.exists():
+            return {}
+
+        try:
+            entries = []
+            with open(self.decisions_path) as f:
+                for line in f:
+                    try:
+                        entries.append(json.loads(line.strip()))
+                    except Exception:
+                        pass
+
+            if len(entries) < self.MIN_ENTRIES:
+                return {}
+
+            # --- Trajectory Intelligence Extraction ---
+
+            # 1. Event type effectiveness (none rate per type)
+            event_stats = {}
+            for e in entries:
+                etype = e.get('event_type', 'unknown')
+                rtype = e.get('reward_type', 'none')
+                if etype not in event_stats:
+                    event_stats[etype] = {'total': 0, 'visible': 0, 'ev': 0, 'none': 0}
+                event_stats[etype]['total'] += 1
+                event_stats[etype][rtype] = event_stats[etype].get(rtype, 0) + 1
+
+            # 2. Drought recovery patterns (what actions broke high droughts)
+            drought_breaks = []  # entries where drought was high and visible reward given
+            for e in entries:
+                if e.get('reward_type') == 'visible' and e.get('drought', 0) >= 5:
+                    drought_breaks.append({
+                        'drought': e['drought'],
+                        'event_type': e['event_type'],
+                        'action': e['action'],
+                    })
+
+            # 3. Average drought at visible reward
+            visible_droughts = [e.get('drought', 0) for e in entries if e.get('reward_type') == 'visible']
+            avg_drought_at_visible = sum(visible_droughts) / len(visible_droughts) if visible_droughts else 0
+
+            # 4. Arc closure success rate (when arcs are closed)
+            arc_closures = [e for e in entries if e.get('arc_closed')]
+
+            return {
+                'event_stats': event_stats,
+                'drought_breaks': drought_breaks,
+                'avg_drought_at_visible': avg_drought_at_visible,
+                'arc_closures': arc_closures,
+                'total_entries': len(entries),
+            }
+
+        except Exception:
+            return {}
+
+    def get_strategies_block(self, current_event_type: str = None) -> str:
+        """
+        Generate "LEARNED STRATEGIES" block for prompt injection.
+        Caches analysis to avoid re-reading on every prompt.
+        """
+        now = time.time()
+        if self._cache is None or (now - self._cache_time) > self.CACHE_TTL_SEC:
+            self._cache = self.analyze()
+            self._cache_time = now
+
+        analysis = self._cache
+        if not analysis:
+            return ''
+
+        tips = []
+        event_stats = analysis.get('event_stats', {})
+        drought_breaks = analysis.get('drought_breaks', [])
+        avg_drought = analysis.get('avg_drought_at_visible', 0)
+        arc_closures = analysis.get('arc_closures', [])
+
+        # --- Contextual Learning Generator ---
+
+        # Strategy tip: identify underused event types
+        underused = []
+        for etype, stats in event_stats.items():
+            if stats['total'] >= 5:
+                none_rate = stats['none'] / stats['total']
+                if none_rate > 0.95:
+                    underused.append((etype, int(none_rate * 100)))
+
+        if underused:
+            worst = max(underused, key=lambda x: x[1])
+            tips.append(f"📊 UNDERUSED: {worst[0]} has {worst[1]}% none rate — these events are opportunities")
+
+        # Recovery tip: what breaks droughts
+        if drought_breaks:
+            # Group by action pattern
+            actions = {}
+            for db in drought_breaks:
+                action = db['action'].split('(')[0] if '(' in db['action'] else db['action']
+                actions[action] = actions.get(action, 0) + 1
+            top_action = max(actions.items(), key=lambda x: x[1])
+            tips.append(f"🔧 RECOVERY: {top_action[0]} broke drought {top_action[1]}x in past sessions")
+
+        # Optimization tip: when to act
+        if avg_drought > 0:
+            tips.append(f"⏱️ TIMING: Visible rewards typically come at drought {avg_drought:.1f} — consider acting earlier")
+
+        # Arc tip: what works for arc closure
+        if arc_closures:
+            tips.append(f"🎯 ARCS: {len(arc_closures)} arc closures successful — explicit payoffs work")
+
+        # Current event context
+        if current_event_type and current_event_type in event_stats:
+            stats = event_stats[current_event_type]
+            if stats['total'] >= 3:
+                visible_rate = stats['visible'] / stats['total'] * 100
+                if visible_rate < 15:
+                    tips.append(f"🎲 THIS EVENT: {current_event_type} only gets visible rewards {visible_rate:.0f}% of the time — break the pattern")
+
+        if not tips:
+            return ''
+
+        lines = ['=== LEARNED STRATEGIES (from your past decisions) ===']
+        lines.extend(tips)
+        lines.append('Use these insights. They come from what actually worked before.')
+        lines.append('=== END LEARNED STRATEGIES ===')
+        return '\n'.join(lines)
+
+
 class RewardValidator:
     """
     Issue #24 — Reward Command Validation (AgentDropoutV2-inspired, arxiv 2602.23258).
@@ -1057,6 +1209,12 @@ class PokemonGM:
         # Issue #20 — Decision Logger (MAS-on-the-Fly phase 1: data collection)
         self.decision_logger = DecisionLogger(
             log_path=self.state_dir / 'decisions.jsonl',
+        )
+
+        # Issue #37 — Trajectory Learning (IBM arxiv 2603.10600-inspired)
+        # Extracts strategic insights from past decisions for prompt injection
+        self.trajectory_learner = TrajectoryLearner(
+            decisions_path=self.state_dir / 'decisions.jsonl',
         )
 
         # Issue #23 — Learning Directives ("Tell Me What To Learn", arxiv 2602.23201)
@@ -3131,6 +3289,13 @@ class PokemonGM:
         past_decisions = self.decision_logger.get_recent_patterns(event_type=event_type)
         if past_decisions:
             prompt += f"\n{past_decisions}\n"
+
+        # Issue #37 — Trajectory Learning (IBM arxiv 2603.10600-inspired)
+        # Extracts strategic insights from past decisions and injects as learned strategies.
+        # Activates after MIN_ENTRIES decisions logged. Caches analysis for 1 hour.
+        strategies_block = self.trajectory_learner.get_strategies_block(current_event_type=event_type)
+        if strategies_block:
+            prompt += f"\n{strategies_block}\n"
 
         # Issue #23 — Learning Directives ("Tell Me What To Learn", arxiv 2602.23201)
         # Inject configurable focus areas to guide what Maren pays attention to.
