@@ -772,6 +772,281 @@ class TrajectoryLearner:
         return '\n'.join(lines)
 
 
+class SkillExtractor:
+    """
+    Issue #38 — Skill Extraction from Decision Trajectories (XSkill-inspired, arxiv 2603.12056).
+
+    XSkill proposes dual-stream learning:
+    - Experiences: action-level guidance (raw decisions — already have via DecisionLogger)
+    - Skills: task-level patterns that generalize across situations
+
+    This class extracts reusable "skills" from successful decisions:
+    - Identifies repeating patterns (e.g., "ace sweep → Fire item reward")
+    - Abstracts to transferable procedures
+    - Matches current context to applicable skills
+
+    Key insight from XSkill: +33% improvement on tool use from skill extraction.
+    Skills are more reusable than raw experiences because they abstract the context.
+
+    Output: "APPLICABLE SKILLS" block with relevant procedural patterns.
+    """
+
+    MIN_ENTRIES = 20  # Need enough decisions to extract patterns
+    CACHE_TTL_SEC = 3600  # Re-extract skills hourly (expensive operation)
+
+    def __init__(self, decisions_path: Path):
+        self.decisions_path = decisions_path
+        self._skills_cache = None
+        self._cache_time = 0
+
+    def _extract_context_signals(self, snippet: str) -> dict:
+        """
+        Parse the response snippet to extract context signals for skill matching.
+        Returns dict with: pokemon_mentioned, action_context, emotional_tone.
+        """
+        signals = {
+            'pokemon': [],
+            'action_context': [],  # sweep, clutch, close_call, rematch, etc.
+            'emotional': [],  # resilience, dominance, underdog, etc.
+        }
+
+        snippet_lower = snippet.lower()
+
+        # Pokemon detection (common starters and team members)
+        pokemon_names = ['blaziken', 'combusken', 'torchic', 'swellow', 'ninjask',
+                         'slaking', 'kirlia', 'ralts', 'lombre', 'pelipper']
+        for poke in pokemon_names:
+            if poke in snippet_lower:
+                signals['pokemon'].append(poke.capitalize())
+
+        # Action context detection
+        if any(w in snippet_lower for w in ['sweep', 'swept', 'clean', 'one turn', 'no damage']):
+            signals['action_context'].append('sweep')
+        if any(w in snippet_lower for w in ['clutch', 'close', 'close call', 'close-call']):
+            signals['action_context'].append('clutch')
+        if any(w in snippet_lower for w in ['rematch', 're-match', 'revenge']):
+            signals['action_context'].append('rematch')
+        if any(w in snippet_lower for w in ['crit', 'critical']):
+            signals['action_context'].append('crit')
+        if any(w in snippet_lower for w in ['level', 'leveled', 'evolved', 'evolution']):
+            signals['action_context'].append('milestone')
+
+        # Emotional tone detection
+        if any(w in snippet_lower for w in ['tanked', 'pushed through', 'despite']):
+            signals['emotional'].append('resilience')
+        if any(w in snippet_lower for w in ['dominated', 'swept', 'clean']):
+            signals['emotional'].append('dominance')
+        if any(w in snippet_lower for w in ['underdog', 'type disadvantage', 'against odds']):
+            signals['emotional'].append('underdog')
+
+        return signals
+
+    def _cluster_successful_decisions(self, entries: list) -> list:
+        """
+        Group successful (visible reward) decisions by similar context.
+        Returns clusters of decisions that share context patterns.
+        """
+        visible = [e for e in entries if e.get('reward_type') == 'visible']
+        if len(visible) < 3:
+            return []
+
+        # Extract context signals for each visible decision
+        enriched = []
+        for e in visible:
+            signals = self._extract_context_signals(e.get('snippet', ''))
+            enriched.append({
+                **e,
+                'signals': signals,
+            })
+
+        # Group by action pattern (the GM command function)
+        action_groups = {}
+        for e in enriched:
+            action = e.get('action', 'none')
+            # Extract just the function name
+            if '(' in action:
+                func = action.split('(')[0].replace('GM.', '')
+            else:
+                func = action
+            if func not in action_groups:
+                action_groups[func] = []
+            action_groups[func].append(e)
+
+        # For each action group with 2+ entries, look for context patterns
+        clusters = []
+        for func, group in action_groups.items():
+            if len(group) < 2:
+                continue
+
+            # Find common context signals
+            all_pokemon = []
+            all_contexts = []
+            all_emotional = []
+            for e in group:
+                all_pokemon.extend(e['signals']['pokemon'])
+                all_contexts.extend(e['signals']['action_context'])
+                all_emotional.extend(e['signals']['emotional'])
+
+            # Count frequencies
+            from collections import Counter
+            pokemon_freq = Counter(all_pokemon)
+            context_freq = Counter(all_contexts)
+            emotional_freq = Counter(all_emotional)
+
+            # Extract common patterns (appearing in 50%+ of decisions)
+            threshold = len(group) / 2
+            common_pokemon = [p for p, c in pokemon_freq.items() if c >= threshold]
+            common_context = [c for c, cnt in context_freq.items() if cnt >= threshold]
+            common_emotional = [e for e, cnt in emotional_freq.items() if cnt >= threshold]
+
+            if common_pokemon or common_context or common_emotional:
+                clusters.append({
+                    'action': func,
+                    'count': len(group),
+                    'common_pokemon': common_pokemon,
+                    'common_context': common_context,
+                    'common_emotional': common_emotional,
+                    'example_snippet': group[-1].get('snippet', '')[:100],
+                })
+
+        return clusters
+
+    def _generate_skills(self, clusters: list) -> list:
+        """
+        Convert context clusters into reusable procedural "skills".
+        Each skill is a natural-language pattern that can be applied.
+        """
+        skills = []
+
+        for cluster in clusters:
+            action = cluster['action']
+            count = cluster['count']
+            pokemon = cluster.get('common_pokemon', [])
+            context = cluster.get('common_context', [])
+            emotional = cluster.get('common_emotional', [])
+
+            # Generate skill description based on patterns
+            conditions = []
+            if pokemon:
+                conditions.append(f"when {'/'.join(pokemon)} is involved")
+            if 'sweep' in context:
+                conditions.append("after a clean sweep")
+            if 'clutch' in context:
+                conditions.append("after a clutch battle")
+            if 'milestone' in context:
+                conditions.append("on a level/evolution milestone")
+            if 'dominance' in emotional:
+                conditions.append("to reinforce dominance")
+            if 'resilience' in emotional:
+                conditions.append("to acknowledge resilience")
+
+            if not conditions:
+                conditions = ["in similar situations"]
+
+            # Map action to readable reward type
+            action_readable = {
+                'give': 'Give item from bag',
+                'giveItem': 'Equip held item',
+                'teachMove': 'Teach a new move',
+                'addExperience': 'Award bonus XP',
+                'setShiny': 'Make shiny',
+                'setFriendship': 'Max friendship',
+            }.get(action, f'Use GM.{action}')
+
+            skill = {
+                'pattern': ' + '.join(conditions[:2]),  # Limit to 2 conditions
+                'action': action_readable,
+                'confidence': count,  # How many times this pattern succeeded
+                'raw_action': action,
+            }
+            skills.append(skill)
+
+        # Sort by confidence (most reliable patterns first)
+        skills.sort(key=lambda x: -x['confidence'])
+        return skills[:5]  # Return top 5 skills
+
+    def extract_skills(self) -> list:
+        """
+        Main extraction method. Returns list of skill dicts.
+        Caches results for CACHE_TTL_SEC.
+        """
+        now = time.time()
+        if self._skills_cache is not None and (now - self._cache_time) < self.CACHE_TTL_SEC:
+            return self._skills_cache
+
+        if not self.decisions_path.exists():
+            return []
+
+        try:
+            entries = []
+            with open(self.decisions_path) as f:
+                for line in f:
+                    try:
+                        entries.append(json.loads(line.strip()))
+                    except Exception:
+                        pass
+
+            if len(entries) < self.MIN_ENTRIES:
+                return []
+
+            clusters = self._cluster_successful_decisions(entries)
+            skills = self._generate_skills(clusters)
+
+            self._skills_cache = skills
+            self._cache_time = now
+            return skills
+
+        except Exception:
+            return []
+
+    def get_applicable_skills(self, event_type: str, context_snippet: str = '') -> str:
+        """
+        Return skills block for prompt injection.
+        Filters to skills relevant to current context.
+        """
+        skills = self.extract_skills()
+        if not skills:
+            return ''
+
+        # Extract signals from current context
+        current_signals = self._extract_context_signals(context_snippet)
+
+        # Score skills by relevance to current context
+        scored_skills = []
+        for skill in skills:
+            score = skill['confidence']  # Base score
+
+            # Boost if pokemon matches current context
+            pattern_lower = skill['pattern'].lower()
+            for poke in current_signals['pokemon']:
+                if poke.lower() in pattern_lower:
+                    score += 2
+
+            # Boost if action context matches
+            for ctx in current_signals['action_context']:
+                if ctx in pattern_lower:
+                    score += 1
+
+            scored_skills.append((skill, score))
+
+        # Sort by relevance score
+        scored_skills.sort(key=lambda x: -x[1])
+
+        # Take top 3 relevant skills
+        relevant = [s[0] for s in scored_skills[:3]]
+
+        if not relevant:
+            return ''
+
+        lines = ['=== APPLICABLE SKILLS (patterns that worked before) ===']
+        for skill in relevant:
+            conf_indicator = '★' * min(skill['confidence'], 3)  # Up to 3 stars
+            lines.append(f"{conf_indicator} {skill['pattern']} → {skill['action']}")
+        lines.append('These are abstracted patterns from successful past decisions.')
+        lines.append('=== END APPLICABLE SKILLS ===')
+        return '\n'.join(lines)
+
+
 class RewardValidator:
     """
     Issue #24 — Reward Command Validation (AgentDropoutV2-inspired, arxiv 2602.23258).
@@ -1214,6 +1489,12 @@ class PokemonGM:
         # Issue #37 — Trajectory Learning (IBM arxiv 2603.10600-inspired)
         # Extracts strategic insights from past decisions for prompt injection
         self.trajectory_learner = TrajectoryLearner(
+            decisions_path=self.state_dir / 'decisions.jsonl',
+        )
+
+        # Issue #38 — Skill Extraction (XSkill-inspired, arxiv 2603.12056)
+        # Extracts reusable procedural "skills" from successful decision patterns
+        self.skill_extractor = SkillExtractor(
             decisions_path=self.state_dir / 'decisions.jsonl',
         )
 
@@ -3296,6 +3577,17 @@ class PokemonGM:
         strategies_block = self.trajectory_learner.get_strategies_block(current_event_type=event_type)
         if strategies_block:
             prompt += f"\n{strategies_block}\n"
+
+        # Issue #38 — Skill Extraction (XSkill-inspired, arxiv 2603.12056)
+        # Extracts reusable procedural "skills" from successful decision patterns.
+        # Skills are task-level abstractions (vs experiences which are action-level).
+        # Uses current prompt context to match relevant skills.
+        skills_block = self.skill_extractor.get_applicable_skills(
+            event_type=event_type,
+            context_snippet=prompt[-500:] if len(prompt) > 500 else prompt  # Recent context for matching
+        )
+        if skills_block:
+            prompt += f"\n{skills_block}\n"
 
         # Issue #23 — Learning Directives ("Tell Me What To Learn", arxiv 2602.23201)
         # Inject configurable focus areas to guide what Maren pays attention to.
