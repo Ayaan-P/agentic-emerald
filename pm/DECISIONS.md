@@ -1540,4 +1540,99 @@ Use these insights. They come from what actually worked before.
 
 ---
 
-**Last Updated:** 2026-03-13 (3:15 AM EST)
+## 🔄 Work Log (2026-03-14)
+
+### Shipped: Skill Extraction from Decision Trajectories (#38)
+**Commit:** 7384208
+**Research alignment:** XSkill (arxiv 2603.12056) — "Continual Learning from Experience and Skills"
+
+#### Key Insight from XSkill
+The paper proposes dual-stream learning:
+- **Experiences:** action-level guidance (raw decisions — already have via DecisionLogger)
+- **Skills:** task-level patterns that generalize across situations
+
+Key result: +33% improvement on tool use via skill extraction.
+
+#### Problem Diagnosed
+TrajectoryLearner (#37) provides statistics ("BATTLE_SUMMARY 16% visible rate") but not
+reusable procedures. Skills are more transferable than raw experiences because they
+abstract the context.
+
+#### Solution: SkillExtractor Class
+New class that extracts reusable procedural "skills" from successful decisions:
+
+**1. Context Signal Extraction:**
+| Signal Type | Examples |
+|-------------|----------|
+| Pokemon | Blaziken, Swellow, Ninjask, Kirlia |
+| Action Context | sweep, clutch, rematch, milestone |
+| Emotional Tone | resilience, dominance, underdog |
+
+**2. Cluster Successful Decisions:**
+Groups visible-reward decisions by shared context patterns.
+
+**3. Generate Procedural Skills:**
+Converts clusters to natural-language patterns:
+- "when Blaziken is involved + after a clean sweep → Give item from bag"
+- "after a clutch battle + to acknowledge resilience → Equip held item"
+- "on a level/evolution milestone → Award bonus XP"
+
+**4. Context-Aware Matching:**
+Extracts signals from current prompt and scores skills by relevance.
+
+**Output Example:**
+```
+=== APPLICABLE SKILLS (patterns that worked before) ===
+★★★ when Blaziken is involved + after a clean sweep → Give item from bag
+★★ after a clutch battle + to acknowledge resilience → Equip held item
+★ on a level/evolution milestone → Award bonus XP
+These are abstracted patterns from successful past decisions.
+=== END APPLICABLE SKILLS ===
+```
+
+#### Implementation Details
+- `SkillExtractor` class with 1-hour cache TTL
+- Requires 20+ decisions before extracting patterns
+- Confidence stars (★) based on pattern repetition count
+- Injected after LEARNED STRATEGIES block in prompts
+
+#### Impact
+- Complements TrajectoryLearner (statistics) with SkillExtractor (procedures)
+- Skills are more transferable than raw experiences
+- XSkill research shows +33% improvement — same pattern applied here
+
+---
+
+### 📊 Research Applied (Mar 12-13 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| XSkill (Experiences + Skills) | 2603.12056 | Skill Extraction (#38) — SHIPPED |
+| LifeSim (BDI User Model) | 2603.12152 | Noted (cognitive model for Dytto) |
+| Cross-Context Review | 2603.12123 | Noted (validates spawn architecture) |
+| EBFT (Feature Matching) | 2603.12248 | Noted (alternative to SFT) |
+| Security Considerations | 2603.12230 | Noted (Perplexity threat model) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (7384208)
+- **Code changes:** +292 lines
+- **Issues created:** 1 (#38)
+- **Issues closed:** 1 (#38, shipped same session)
+- **New classes:** 1 (SkillExtractor)
+- **New methods:** 5 (_extract_context_signals, _cluster_successful_decisions, _generate_skills, extract_skills, get_applicable_skills)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-14 (3:15 AM EST)

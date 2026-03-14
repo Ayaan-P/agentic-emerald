@@ -1666,7 +1666,77 @@ surfaces this pattern.
 
 ---
 
-Last updated: 2026-03-13 (3:15 AM EST)
-Session duration: ~35 min
-Research: IBM "Trajectory-Informed Memory Generation" → 1 feature shipped
+## Daily Standup — 2026-03-14, 3:15 AM
+
+### ✅ Completed Today
+
+#### Skill Extraction from Decision Trajectories (#38) — SHIPPED & CLOSED
+**Research:** XSkill (arxiv 2603.12056) — "Continual Learning from Experience and Skills"
+**Key result:** +33% improvement on tool use via dual-stream learning
+
+**Problem:** TrajectoryLearner (#37) provides statistics ("BATTLE_SUMMARY 16% visible rate")
+but not reusable procedures. The XSkill paper shows separating **experiences** (action-level)
+from **skills** (task-level) significantly improves agent performance.
+
+**What shipped (commit 7384208):**
+- [x] `SkillExtractor` class that extracts reusable procedural "skills"
+- [x] Context signal extraction: Pokemon names, action context (sweep/clutch/milestone), emotional tone
+- [x] Cluster successful decisions by shared context patterns
+- [x] Generate natural-language procedural skills from clusters
+- [x] Context-aware matching: scores skills by relevance to current prompt
+- [x] Prompt injection after LEARNED STRATEGIES block
+- [x] 1-hour cache TTL, requires 20+ decisions to activate
+
+**Example output:**
+```
+=== APPLICABLE SKILLS (patterns that worked before) ===
+★★★ when Blaziken is involved + after a clean sweep → Give item from bag
+★★ after a clutch battle + to acknowledge resilience → Equip held item
+★ on a level/evolution milestone → Award bonus XP
+These are abstracted patterns from successful past decisions.
+=== END APPLICABLE SKILLS ===
+```
+
+**Impact:**
+- Complements TrajectoryLearner (statistics) with SkillExtractor (procedures)
+- Skills are more transferable than raw experiences (abstracted context)
+- XSkill research shows +33% improvement — same pattern applied here
+
+---
+
+### 📊 Research Applied (Mar 12-13 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| XSkill (Experiences + Skills) | 2603.12056 | Skill Extraction (#38) — SHIPPED |
+| LifeSim (BDI User Model) | 2603.12152 | Noted (cognitive model for Dytto) |
+| Cross-Context Review | 2603.12123 | Noted (validates spawn architecture) |
+| EBFT (Feature Matching) | 2603.12248 | Noted (alternative to SFT) |
+| Security Considerations | 2603.12230 | Noted (Perplexity threat model) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (7384208)
+- **Code changes:** +292 lines
+- **Issues created:** 1 (#38)
+- **Issues closed:** 1 (#38, shipped same session)
+- **New classes:** 1 (SkillExtractor)
+- **New methods:** 5
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+Last updated: 2026-03-14 (3:15 AM EST)
+Session duration: ~30 min
+Research: XSkill "Continual Learning from Experience and Skills" → 1 feature shipped
 
