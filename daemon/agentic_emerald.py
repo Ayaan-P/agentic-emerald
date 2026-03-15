@@ -3595,7 +3595,67 @@ class PokemonGM:
         if directives_block:
             prompt += f"\n{directives_block}\n"
 
+        # Issue #39 — Self-Verification Prompt (Cross-Context Review, arxiv 2603.12123)
+        # Research finding: "LLMs catch more errors when explicitly verifying decisions"
+        # (28.6% F1 vs 24.6% for same-session review, p=0.008)
+        # Applied: For high-stakes moments, inject verification checklist.
+        # This forces explicit reasoning before acting, catching decision errors.
+        is_high_stakes = self._is_high_stakes_decision(event_type, pending_arcs, drift)
+        if is_high_stakes:
+            prompt += "\n=== DECISION VERIFICATION (Cross-Context Review) ===\n"
+            prompt += "HIGH-STAKES MOMENT DETECTED. Before acting, verify:\n"
+            prompt += "\n"
+            prompt += "1. VISIBILITY CHECK:\n"
+            prompt += "   □ Is my planned reward VISIBLE to the player?\n"
+            prompt += "   • VISIBLE: teachMove, giveItem, setShiny, addExperience (>100)\n"
+            prompt += "   • INVISIBLE: addEVs, setFriendship — player never sees these\n"
+            prompt += "\n"
+            prompt += "2. ARC ALIGNMENT:\n"
+            prompt += "   □ Does this reward match a pending arc in the ARC LEDGER?\n"
+            prompt += "   □ If closing an arc, include: ARC_CLOSED: <arc name>\n"
+            prompt += "\n"
+            prompt += "3. PLAYER IMPACT:\n"
+            prompt += "   □ Will the player pause and go 'wait, how did that happen?'\n"
+            prompt += "   □ Will this make the game feel alive, not just technically correct?\n"
+            prompt += "\n"
+            prompt += "If ANY check fails, reconsider your decision.\n"
+            prompt += "=== END VERIFICATION ===\n"
+
         return prompt
+
+    def _is_high_stakes_decision(self, event_type: str, pending_arcs: list, drift: dict) -> bool:
+        """
+        Determine if the current decision context is high-stakes.
+        
+        Issue #39 — Cross-Context Review (arxiv 2603.12123)
+        Research shows explicit verification catches 16% more errors.
+        We trigger verification for:
+        - High drought (player hasn't felt Maren)
+        - IMMEDIATE arcs pending
+        - Trainer rematches (significant battles)
+        - Drift severity warning or critical
+        """
+        # Drought approaching forced intervention
+        if self.ev_drought_count >= 6:
+            return True
+        
+        # IMMEDIATE arc waiting — this is a critical payoff opportunity
+        if pending_arcs:
+            for arc in pending_arcs:
+                if 'IMMEDIATE' in arc.upper():
+                    return True
+        
+        # Trainer rematch or major battle
+        if hasattr(self, 'battle_buffer') and self.battle_buffer:
+            for entry in self.battle_buffer:
+                if entry.get('is_rematch') or entry.get('is_trainer'):
+                    return True
+        
+        # Drift severity is elevated
+        if drift.get('severity') in ('warning', 'critical'):
+            return True
+        
+        return False
     
     def process_event(self, data: dict):
         """Process event from mGBA"""
