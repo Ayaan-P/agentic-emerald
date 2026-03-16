@@ -1047,6 +1047,330 @@ class SkillExtractor:
         return '\n'.join(lines)
 
 
+class ArcGenerator:
+    """
+    Issue #40 — Auto-Arc Generation (Story Hook Detection).
+    
+    When the ARC LEDGER is nearly empty (no HIGH priority PENDING arcs),
+    Maren has nothing to work toward. This class detects arc opportunities
+    from the current team state and generates new story hooks.
+    
+    Research alignment: This addresses the root cause of the 91% "none" rate.
+    If Maren has no goals, she defaults to passivity. By generating arcs
+    dynamically, we give her narrative purpose.
+    
+    Arc detection heuristics:
+    - Pokemon approaching evolution → "Evolution Watch" arc
+    - Pokemon leading 3+ consecutive battles → "MVP Recognition" arc
+    - Pokemon with low move coverage → "Move Upgrade" arc
+    - Recently caught Pokemon → "Proving Ground" arc
+    - Type coverage gaps → "Team Balance" arc
+    
+    Arcs are auto-added to PLAYTHROUGH.md when inventory is low.
+    """
+    
+    # Evolution level thresholds for common Pokemon (species_id -> evolution_level)
+    # Gen 3 starters and common mons
+    EVOLUTION_LEVELS = {
+        1: 16,    # Bulbasaur → Ivysaur
+        4: 16,    # Charmander → Charmeleon
+        7: 16,    # Squirtle → Wartortle
+        152: 16,  # Chikorita → Bayleef
+        155: 14,  # Cyndaquil → Quilava
+        158: 18,  # Totodile → Croconaw
+        252: 16,  # Treecko → Grovyle
+        255: 16,  # Torchic → Combusken
+        258: 16,  # Mudkip → Marshtomp
+        261: 18,  # Poochyena → Mightyena
+        263: 20,  # Zigzagoon → Linoone
+        265: 7,   # Wurmple → Silcoon/Cascoon
+        270: 14,  # Lotad → Lombre
+        273: 14,  # Seedot → Nuzleaf
+        276: 22,  # Taillow → Swellow
+        278: 25,  # Wingull → Pelipper
+        280: 20,  # Ralts → Kirlia
+        283: 22,  # Surskit → Masquerain
+        285: 23,  # Shroomish → Breloom
+        287: 18,  # Slakoth → Vigoroth
+        290: 20,  # Nincada → Ninjask
+        293: 20,  # Whismur → Loudred
+        296: 24,  # Makuhita → Hariyama
+        304: 32,  # Aron → Lairon
+        307: 37,  # Meditite → Medicham
+        309: 26,  # Electrike → Manectric
+        318: 30,  # Carvanha → Sharpedo
+        320: 40,  # Wailmer → Wailord
+        322: 33,  # Numel → Camerupt
+        325: 32,  # Spoink → Grumpig
+        328: 35,  # Trapinch → Vibrava
+        331: 32,  # Cacnea → Cacturne
+        333: 35,  # Swablu → Altaria
+        339: 30,  # Barboach → Whiscash
+        341: 30,  # Corphish → Crawdaunt
+        343: 36,  # Baltoy → Claydol
+        345: 40,  # Lileep → Cradily
+        347: 40,  # Anorith → Armaldo
+        349: 20,  # Feebas → Milotic (beauty)
+        353: 37,  # Shuppet → Banette
+        355: 37,  # Duskull → Dusclops
+        361: 42,  # Snorunt → Glalie
+        363: 32,  # Spheal → Sealeo
+        366: 1,   # Clamperl → trade evos
+        371: 30,  # Bagon → Shelgon
+        374: 20,  # Beldum → Metang
+    }
+    
+    # Second stage evolution levels
+    EVOLUTION_LEVELS_STAGE2 = {
+        2: 32,    # Ivysaur → Venusaur
+        5: 36,    # Charmeleon → Charizard
+        8: 36,    # Wartortle → Blastoise
+        153: 32,  # Bayleef → Meganium
+        156: 36,  # Quilava → Typhlosion
+        159: 30,  # Croconaw → Feraligatr
+        253: 36,  # Grovyle → Sceptile
+        256: 36,  # Combusken → Blaziken
+        259: 36,  # Marshtomp → Swampert
+        281: 30,  # Kirlia → Gardevoir
+        288: 36,  # Vigoroth → Slaking
+        294: 40,  # Loudred → Exploud
+        305: 42,  # Lairon → Aggron
+        329: 45,  # Vibrava → Flygon
+        364: 44,  # Sealeo → Walrein
+        372: 50,  # Shelgon → Salamence
+        375: 45,  # Metang → Metagross
+    }
+    
+    # Strong moves worth suggesting (move_id -> move_name)
+    STRONG_MOVES = {
+        53: "Flamethrower",
+        58: "Ice Beam",
+        85: "Thunderbolt",
+        89: "Earthquake",
+        94: "Psychic",
+        188: "Sludge Bomb",
+        202: "Giga Drain",
+        231: "Iron Tail",
+        237: "Hidden Power",
+        247: "Shadow Ball",
+        257: "Heat Wave",
+        299: "Blaze Kick",
+        332: "Aerial Ace",
+        352: "Water Pulse",
+    }
+    
+    # Gen 3 commonly useful held items
+    HELD_ITEMS = {
+        234: "Leftovers",
+        253: "Shell Bell",
+        232: "Scope Lens",
+        217: "Quick Claw",
+        221: "King's Rock",
+        219: "Bright Powder",
+        230: "Focus Band",
+        215: "Charcoal",
+        220: "Mystic Water",
+        227: "Soft Sand",
+        223: "NeverMeltIce",
+        216: "Magnet",
+        237: "BlackGlasses",
+    }
+    
+    MIN_HIGH_ARCS = 1  # Minimum HIGH priority arcs to maintain
+    
+    def __init__(self, playthrough_path: Path, species_names: dict):
+        self.playthrough_path = playthrough_path
+        self.species_names = species_names
+        self.last_generation_time = 0
+        self.GENERATION_COOLDOWN = 3600  # 1 hour cooldown between generations
+    
+    def needs_new_arcs(self, pending_arcs: list) -> bool:
+        """
+        Check if we need to generate new arcs.
+        
+        Returns True if:
+        - No PENDING arcs at all, OR
+        - No HIGH priority PENDING arcs
+        """
+        if not pending_arcs:
+            return True
+        
+        high_pending = [a for a in pending_arcs if a.get('priority') == 'HIGH' and a.get('status') in ('PENDING', 'IMMEDIATE')]
+        return len(high_pending) < self.MIN_HIGH_ARCS
+    
+    def generate_arcs(self, party: list, player_profile: dict, battle_history: list) -> list:
+        """
+        Generate new arc suggestions based on current team state.
+        
+        Args:
+            party: Current party from game state
+            player_profile: From PlayerProfileTracker
+            battle_history: Recent battle records
+        
+        Returns: list of arc dicts with arc_name, pokemon, promise, priority
+        """
+        arcs = []
+        
+        if not party:
+            return arcs
+        
+        # Track Pokemon we've already created arcs for
+        arc_pokemon = set()
+        
+        # 1. Evolution Watch — Pokemon close to evolution
+        for i, poke in enumerate(party):
+            if not poke.get('species'):
+                continue
+            species_id = poke.get('species', 0)
+            level = poke.get('level', 0)
+            species_name = self.species_names.get(species_id, f"Pokemon_{species_id}")
+            
+            # Check stage 1 evolutions
+            if species_id in self.EVOLUTION_LEVELS:
+                evo_level = self.EVOLUTION_LEVELS[species_id]
+                if level >= evo_level - 3 and level < evo_level:
+                    arcs.append({
+                        'arc_name': f'{species_name} Evolution',
+                        'pokemon': species_name,
+                        'status': 'PENDING',
+                        'promise': f'When {species_name} evolves (L{evo_level}), give visible reward to celebrate',
+                        'priority': 'HIGH'
+                    })
+                    arc_pokemon.add(species_id)
+            
+            # Check stage 2 evolutions
+            if species_id in self.EVOLUTION_LEVELS_STAGE2:
+                evo_level = self.EVOLUTION_LEVELS_STAGE2[species_id]
+                if level >= evo_level - 3 and level < evo_level:
+                    arcs.append({
+                        'arc_name': f'{species_name} Final Form',
+                        'pokemon': species_name,
+                        'status': 'PENDING',
+                        'promise': f'Final evolution at L{evo_level} — make it special (shiny/move/item)',
+                        'priority': 'HIGH'
+                    })
+                    arc_pokemon.add(species_id)
+        
+        # 2. MVP Recognition — Pokemon leading many battles
+        trust = player_profile.get('pokemon_trust', {})
+        for species_id, data in trust.items():
+            if int(species_id) in arc_pokemon:
+                continue
+            battles_led = data.get('battles_led', 0)
+            battles_won = data.get('battles_won', 0)
+            pokemon_name = data.get('name', 'Unknown')
+            
+            if battles_led >= 5 and battles_won >= 3:
+                # Already a leader — create recognition arc
+                arcs.append({
+                    'arc_name': f'{pokemon_name} Leadership',
+                    'pokemon': pokemon_name,
+                    'status': 'PENDING',
+                    'promise': f'{pokemon_name} has led {battles_led} battles. Recognize their leadership with a signature item or move',
+                    'priority': 'MEDIUM'
+                })
+                arc_pokemon.add(int(species_id))
+        
+        # 3. Comeback Hero — Pokemon with high comeback ratio
+        for species_id, data in trust.items():
+            if int(species_id) in arc_pokemon:
+                continue
+            comebacks = data.get('comebacks', 0)
+            pokemon_name = data.get('name', 'Unknown')
+            
+            if comebacks >= 2:
+                arcs.append({
+                    'arc_name': f'{pokemon_name} the Resilient',
+                    'pokemon': pokemon_name,
+                    'status': 'PENDING',
+                    'promise': f'{pokemon_name} has {comebacks} comebacks. Next clutch win gets Focus Band or special recognition',
+                    'priority': 'MEDIUM'
+                })
+                arc_pokemon.add(int(species_id))
+        
+        # Limit to 3 arcs maximum per generation
+        return arcs[:3]
+    
+    def add_arcs_to_playthrough(self, new_arcs: list) -> int:
+        """
+        Add generated arcs to PLAYTHROUGH.md ARC LEDGER.
+        
+        Returns: number of arcs added
+        """
+        if not new_arcs:
+            return 0
+        
+        if not self.playthrough_path.exists():
+            return 0
+        
+        # Check cooldown
+        current_time = time.time()
+        if current_time - self.last_generation_time < self.GENERATION_COOLDOWN:
+            return 0
+        
+        try:
+            content = self.playthrough_path.read_text()
+            
+            # Find the ARC LEDGER table end (the line before ---)
+            lines = content.split('\n')
+            insert_index = None
+            
+            for i, line in enumerate(lines):
+                # Find last row of the ARC LEDGER table
+                if line.strip().startswith('|') and '|' in line and 'Arc' not in line and '---' not in line:
+                    # This is a data row
+                    insert_index = i + 1
+                elif insert_index and (line.strip().startswith('<!--') or line.strip().startswith('---') or line.strip() == ''):
+                    # Found end of table
+                    break
+            
+            if insert_index is None:
+                return 0
+            
+            # Format new arcs as table rows
+            new_rows = []
+            for arc in new_arcs:
+                row = f"| {arc['arc_name']} | {arc['pokemon']} | {arc['status']} | {arc['promise']} | {arc['priority']} |"
+                new_rows.append(row)
+            
+            # Insert new rows
+            for j, row in enumerate(new_rows):
+                lines.insert(insert_index + j, row)
+            
+            # Write back
+            self.playthrough_path.write_text('\n'.join(lines))
+            self.last_generation_time = current_time
+            
+            return len(new_arcs)
+        
+        except Exception as e:
+            print(f"[ARC-GEN] Error adding arcs: {e}")
+            return 0
+    
+    def maybe_generate_arcs(self, pending_arcs: list, party: list, player_profile: dict, battle_history: list) -> list:
+        """
+        Check if new arcs are needed and generate them if so.
+        
+        This is the main entry point called by the daemon.
+        
+        Returns: list of generated arcs (empty if none generated)
+        """
+        if not self.needs_new_arcs(pending_arcs):
+            return []
+        
+        new_arcs = self.generate_arcs(party, player_profile, battle_history)
+        
+        if new_arcs:
+            added = self.add_arcs_to_playthrough(new_arcs)
+            if added > 0:
+                print(f"[ARC-GEN] Generated {added} new story arcs:")
+                for arc in new_arcs[:added]:
+                    print(f"  📖 {arc['arc_name']} ({arc['pokemon']}) — {arc['priority']}")
+            return new_arcs[:added]
+        
+        return []
+
+
 class RewardValidator:
     """
     Issue #24 — Reward Command Validation (AgentDropoutV2-inspired, arxiv 2602.23258).
@@ -1496,6 +1820,13 @@ class PokemonGM:
         # Extracts reusable procedural "skills" from successful decision patterns
         self.skill_extractor = SkillExtractor(
             decisions_path=self.state_dir / 'decisions.jsonl',
+        )
+
+        # Issue #40 — Auto-Arc Generation (Story Hook Detection)
+        # When ARC LEDGER is nearly empty, generate new narrative arcs from team state
+        self.arc_generator = ArcGenerator(
+            playthrough_path=self.agent_memory_dir / 'PLAYTHROUGH.md',
+            species_names=self.species_names,
         )
 
         # Issue #23 — Learning Directives ("Tell Me What To Learn", arxiv 2602.23201)
@@ -3250,6 +3581,22 @@ class PokemonGM:
         """Build context-rich prompt for the agent"""
         state = ctx.get('state', {})
         party = state.get('party', [])
+        
+        # Issue #40 — Auto-Arc Generation (Story Hook Detection)
+        # Before building prompt, check if we need new arcs. If ARC LEDGER is nearly
+        # empty, generate new story hooks from current team state. This addresses the
+        # root cause of 91% "none" rate: Maren has nothing to work toward.
+        pending_arcs = self._get_pending_arcs_structured()
+        if self.arc_generator.needs_new_arcs(pending_arcs):
+            new_arcs = self.arc_generator.maybe_generate_arcs(
+                pending_arcs=pending_arcs,
+                party=party,
+                player_profile=self.player_profile.profile,
+                battle_history=self.battle_history,
+            )
+            if new_arcs:
+                # Re-fetch arcs after generation
+                pending_arcs = self._get_pending_arcs_structured()
         
         # Calculate party health
         if party:
