@@ -1798,7 +1798,88 @@ Maren makes decisions without explicit verification. High-stakes moments deserve
 
 ---
 
-Last updated: 2026-03-15 (3:15 AM EST)
-Session duration: ~25 min
-Research: Cross-Context Review "Separating Production and Review Sessions" → 1 feature shipped
+## Daily Standup — 2026-03-16, 3:15 AM
+
+### ✅ Completed Today
+
+#### Auto-Arc Generation (#40) — SHIPPED & CLOSED
+**Research:** Data-driven root cause analysis of systematic passivity
+
+**Problem Diagnosed:**
+Analysis of decisions.jsonl revealed the **root cause** of 91% "none" rate:
+
+| Metric | Value |
+|--------|-------|
+| BATTLE_SUMMARY action rate | 16.0% (8/50) |
+| EXPLORATION_SUMMARY action rate | 2.7% (2/74) |
+| Recent 30 action rate | 6.7% (2/30) |
+| Max drought | 24 |
+| Avg drought | 5.9 |
+
+**Why?** ARC LEDGER is nearly empty:
+- 4 arcs DELIVERED (Closer, Ralts, Drainer, Blaziken)
+- 1 arc PENDING (Swellow Leadership, MEDIUM)
+- **No HIGH priority goals to pursue**
+
+Previous features (#25-#39) addressed symptoms, not root cause.
+
+**What shipped (commit 2577c72):**
+New `ArcGenerator` class with arc detection heuristics:
+
+| Heuristic | Trigger | Priority |
+|-----------|---------|----------|
+| Evolution Watch | Pokemon 3 levels from evolution | HIGH |
+| Final Form | Stage 2 evolution approaching | HIGH |
+| MVP Recognition | 5+ battles led, 3+ wins | MEDIUM |
+| Comeback Hero | 2+ comebacks recorded | MEDIUM |
+
+**Features:**
+- [x] Called at start of `build_prompt()` before arcs are injected
+- [x] Checks `needs_new_arcs()` — triggers when no HIGH priority PENDING arcs
+- [x] Generates up to 3 arcs per cycle
+- [x] Auto-adds to PLAYTHROUGH.md ARC LEDGER
+- [x] 1-hour cooldown between generations
+- [x] Evolution level database for 50+ Gen 3 Pokemon
+- [x] Logged with 📖 emoji for visibility
+
+**Why this works:**
+Previous features were band-aids — they caught passivity after it happened.
+This feature prevents passivity by giving Maren narrative purpose.
+
+---
+
+### 📊 Research Applied (Mar 14-15 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| XSkill (Continual Learning) | 2603.12056 | Informed dual-stream design |
+| Cross-Context Review | 2603.12123 | Already applied (#39) |
+| LifeSim (BDI Model) | 2603.12152 | Could inform arc condition modeling |
+| Security Considerations | 2603.12230 | Noted (agent security playbook) |
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (2577c72)
+- **Code changes:** +347 lines
+- **Issues created:** 1 (#40)
+- **Issues closed:** 1 (#40, shipped same session)
+- **New classes:** 1 (ArcGenerator)
+- **Data structures:** 3 (evolution levels, strong moves, held items)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+Last updated: 2026-03-16 (3:15 AM EST)
+Session duration: ~30 min
+Analysis: Root cause of passivity → Auto-Arc Generation shipped to address it
 

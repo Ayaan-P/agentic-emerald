@@ -1723,4 +1723,100 @@ If ANY check fails, reconsider your decision.
 
 ---
 
-**Last Updated:** 2026-03-15 (3:15 AM EST)
+## 🔄 Work Log (2026-03-16)
+
+### Shipped: Auto-Arc Generation (Story Hook Detection) (#40)
+**Commit:** 2577c72
+**Research alignment:** Data-driven root cause analysis
+
+#### Problem Diagnosed
+Analysis of decisions.jsonl revealed the **root cause** of systematic passivity:
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Total decisions | 130 | Sufficient sample |
+| BATTLE_SUMMARY action rate | 16% (8/50) | Low |
+| EXPLORATION_SUMMARY action rate | 2.7% (2/74) | Very low |
+| Recent 30 decisions action rate | 6.7% (2/30) | Concerningly low |
+| Max drought | 24 | Very high |
+| Avg drought | 5.9 | Elevated |
+
+**But why?** Previous features (#25 Drought Breaker, #30 Instruction Fade-Out, #34 Drift Detection,
+#39 Self-Verification) address symptoms but not the root cause.
+
+**Root cause discovered:** The ARC LEDGER is nearly empty.
+- 4 arcs DELIVERED (Closer Arc, Ralts Arc, Drainer Arc, Blaziken Awakens)
+- Only 1 arc PENDING (Swellow Leadership, MEDIUM priority)
+- **Maren has no HIGH priority goals to pursue**
+
+When Maren has nothing to work toward, she defaults to passivity. The agent responds
+"none" not because she's malfunctioning, but because there's genuinely nothing to do.
+
+#### Solution: Auto-Arc Generation
+New `ArcGenerator` class that detects arc opportunities from current team state:
+
+**Arc Detection Heuristics:**
+
+| Heuristic | Trigger | Priority |
+|-----------|---------|----------|
+| Evolution Watch | Pokemon within 3 levels of evolution | HIGH |
+| Final Form | Pokemon within 3 levels of stage 2 evolution | HIGH |
+| MVP Recognition | 5+ battles led with 3+ wins | MEDIUM |
+| Comeback Hero | 2+ comebacks recorded | MEDIUM |
+
+**Integration:**
+- Called at start of `build_prompt()` before arcs are injected
+- Checks `needs_new_arcs()` — triggers when no HIGH priority PENDING arcs exist
+- Generates up to 3 arcs per cycle
+- Auto-adds to PLAYTHROUGH.md ARC LEDGER
+- 1-hour cooldown between generations (prevent spam)
+- Re-fetches arcs after generation to include new ones in prompt
+
+**Evolution Level Database:**
+- Includes 50+ Gen 3 Pokemon evolution levels (stages 1 and 2)
+- Starters, common routes, Hoenn natives
+
+**Why this works:**
+Previous features were band-aids — they caught passivity after it happened.
+This feature prevents passivity by giving Maren narrative purpose tied to actual gameplay.
+When the team changes, new arcs emerge. When goals are met, new ones generate.
+
+---
+
+### 📊 Research Applied (Mar 14-15 Digests)
+
+| Paper | arxiv | Applied How |
+|-------|-------|-------------|
+| XSkill (Continual Learning) | 2603.12056 | Informed dual-stream design (experiences vs arcs) |
+| Cross-Context Review | 2603.12123 | Already applied (#39) |
+| LifeSim (BDI User Model) | 2603.12152 | Noted (could inform arc condition modeling) |
+| Security Considerations | 2603.12230 | Noted (agent security playbook) |
+
+**Key insight from analysis:** The previous features were solving the wrong problem.
+They were trying to make Maren act more when she was passive. But Maren was passive
+*because she had no goals*. Auto-Arc Generation gives her goals.
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (2577c72)
+- **Code changes:** +347 lines
+- **Issues created:** 1 (#40)
+- **Issues closed:** 1 (#40, shipped same session)
+- **New classes:** 1 (ArcGenerator)
+- **New methods:** 5 (needs_new_arcs, generate_arcs, add_arcs_to_playthrough, maybe_generate_arcs, + build_prompt integration)
+- **Data structures:** 3 (EVOLUTION_LEVELS, EVOLUTION_LEVELS_STAGE2, STRONG_MOVES/HELD_ITEMS)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-16 (3:15 AM EST)
