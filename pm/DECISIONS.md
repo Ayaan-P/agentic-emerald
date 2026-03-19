@@ -1994,4 +1994,77 @@ Expected: 2-3 new arcs based on current team state.
 
 ---
 
-**Last Updated:** 2026-03-17 (3:15 AM EST)
+## 🔄 Work Log (2026-03-19)
+
+### Shipped: Actionable Recommendations in Health Check (#43)
+**Commit:** 5eaa6f8
+
+#### Problem
+Health Check Tool (#42) reports issues but doesn't tell users what to do about them.
+Users see warnings but don't know if they need to act or if issues will self-resolve.
+
+#### Solution: RECOMMENDATIONS Section
+New `generate_recommendations()` and `print_recommendations()` functions that:
+- Analyze all detected issues
+- Group by priority (HIGH/MEDIUM/LOW)
+- Provide specific actions for each issue
+- Tag auto-resolvable issues with `[auto]`
+- Show summary when all issues self-resolve
+
+**Example output:**
+```
+=== RECOMMENDATIONS ===
+
+  🔴 HIGH PRIORITY:
+    • High passivity (91% none rate)
+      → Start a gameplay session — Auto-Arc Generator will create new goals [auto]
+
+  🟡 MEDIUM:
+    • No HIGH priority arcs pending
+      → Play a battle — ArcGenerator will create new story hooks [auto]
+
+  🔵 LOW:
+    • Historical high drought (24) in older data
+      → No action needed — Drought Breaker now caps at 12 [auto]
+    • 130 old decisions ready for compression
+      → Restart daemon — compression runs automatically on startup [auto]
+    • Player profile is 14 days old
+      → Profile auto-updates on gameplay — play to refresh [auto]
+
+  All 5 issues will auto-resolve on next gameplay/restart.
+```
+
+#### Recommendation Types
+| Trigger | Priority | Action |
+|---------|----------|--------|
+| None rate > 85% | HIGH | Start gameplay (Auto-Arc triggers) |
+| No HIGH priority arcs | MEDIUM | Play a battle (ArcGenerator creates hooks) |
+| Historical high drought | LOW | No action (Drought Breaker caps at 12) |
+| Decisions ready for compression | LOW | Restart daemon (auto-compresses) |
+| Stale player profile (>7 days) | LOW | Play to refresh (auto-updates) |
+
+#### Also Fixed
+- Closed Issue #42 (Health Check Tool) — was shipped Mar 18 but left OPEN
+
+---
+
+### 📊 Metrics
+- **Commits shipped:** 1 (5eaa6f8)
+- **Code changes:** +145 lines
+- **Issues created:** 1 (#43)
+- **Issues closed:** 2 (#42, #43)
+- **New functions:** 2 (generate_recommendations, print_recommendations)
+- **Breaking changes:** 0 ✅
+- **Syntax errors:** 0 ✅
+- **Backward compatibility:** 100% ✅
+
+### 🚧 Still Pending
+1. **Demo video** (#3) — Awaiting Ayaan's time
+2. **Fire Red/Leaf Green** (#11) — Future work (Emerald polish first)
+3. **Narrative Tiers** (#22) — MEDIUM priority
+4. **Mega Evolution Sprite Injection** (#27) — WIP
+5. **Performative CoT Detection** (#31) — Research direction
+
+---
+
+**Last Updated:** 2026-03-19 (3:15 AM EST)
