@@ -227,6 +227,147 @@ def check_compression_status(decisions_path, compressed_path):
         else:
             print_ok("No compression needed yet")
 
+def generate_recommendations(base):
+    """Generate actionable recommendations based on detected issues."""
+    recommendations = []
+    agent_state = base / 'agent' / 'state'
+    agent_memory = base / 'agent' / 'memory'
+    
+    # Check decisions
+    decisions_path = agent_state / 'decisions.jsonl'
+    if decisions_path.exists():
+        with open(decisions_path) as f:
+            decisions = [json.loads(line) for line in f]
+        
+        if decisions:
+            none_rate = sum(1 for d in decisions if d['action'] == 'none') / len(decisions) * 100
+            max_drought = max(d['drought'] for d in decisions)
+            
+            # High passivity
+            if none_rate > 85:
+                recommendations.append({
+                    'priority': 'HIGH',
+                    'issue': f'High passivity ({none_rate:.0f}% none rate)',
+                    'action': 'Start a gameplay session — Auto-Arc Generator will create new goals',
+                    'auto': True
+                })
+            
+            # Pre-feature drought data
+            if max_drought > 20:
+                recommendations.append({
+                    'priority': 'LOW',
+                    'issue': f'Historical high drought ({max_drought}) in older data',
+                    'action': 'No action needed — Drought Breaker now caps at 12',
+                    'auto': True
+                })
+    
+    # Check arcs
+    playthrough_path = agent_memory / 'PLAYTHROUGH.md'
+    if playthrough_path.exists():
+        with open(playthrough_path) as f:
+            content = f.read()
+        
+        if '## ARC LEDGER' in content:
+            ledger = content.split('## ARC LEDGER')[1].split('##')[0]
+            pending_high = re.findall(r'\| ([^|]+) \| ([^|]+) \| PENDING \| ([^|]+) \| HIGH', ledger)
+            immediate = re.findall(r'\| ([^|]+) \| ([^|]+) \| IMMEDIATE', ledger)
+            
+            if not pending_high and not immediate:
+                recommendations.append({
+                    'priority': 'MEDIUM',
+                    'issue': 'No HIGH priority arcs pending',
+                    'action': 'Play a battle — ArcGenerator will create new story hooks from team state',
+                    'auto': True
+                })
+            
+            if immediate:
+                for arc in immediate:
+                    recommendations.append({
+                        'priority': 'HIGH',
+                        'issue': f'IMMEDIATE arc waiting: {arc[0].strip()}',
+                        'action': 'Arc should close on next relevant event',
+                        'auto': True
+                    })
+    
+    # Check compression status
+    if decisions_path.exists():
+        with open(decisions_path) as f:
+            decisions = [json.loads(line) for line in f]
+        
+        cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+        old_count = sum(1 for d in decisions if d.get('ts', '') < cutoff)
+        
+        if old_count >= 50:
+            recommendations.append({
+                'priority': 'LOW',
+                'issue': f'{old_count} old decisions ready for compression',
+                'action': 'Restart daemon — compression runs automatically on startup',
+                'auto': True
+            })
+    
+    # Check profile freshness
+    profile_path = agent_state / 'player_profile.json'
+    if profile_path.exists():
+        with open(profile_path) as f:
+            profile = json.load(f)
+        
+        updated = profile.get('updated_at', '')
+        if updated:
+            try:
+                updated_dt = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                days_old = (datetime.now() - updated_dt.replace(tzinfo=None)).days
+                if days_old > 7:
+                    recommendations.append({
+                        'priority': 'LOW',
+                        'issue': f'Player profile is {days_old} days old',
+                        'action': 'Profile auto-updates on gameplay — play to refresh',
+                        'auto': True
+                    })
+            except:
+                pass
+    
+    return recommendations
+
+def print_recommendations(recommendations):
+    """Print actionable recommendations."""
+    if not recommendations:
+        print_header("RECOMMENDATIONS")
+        print_ok("No issues detected — system is healthy")
+        return
+    
+    print_header("RECOMMENDATIONS")
+    
+    # Group by priority
+    high = [r for r in recommendations if r['priority'] == 'HIGH']
+    medium = [r for r in recommendations if r['priority'] == 'MEDIUM']
+    low = [r for r in recommendations if r['priority'] == 'LOW']
+    
+    if high:
+        print(f"\n  {C.RED}🔴 HIGH PRIORITY:{C.RESET}")
+        for r in high:
+            auto_tag = f" {C.GREEN}[auto]{C.RESET}" if r.get('auto') else ""
+            print(f"    • {r['issue']}")
+            print(f"      → {r['action']}{auto_tag}")
+    
+    if medium:
+        print(f"\n  {C.YELLOW}🟡 MEDIUM:{C.RESET}")
+        for r in medium:
+            auto_tag = f" {C.GREEN}[auto]{C.RESET}" if r.get('auto') else ""
+            print(f"    • {r['issue']}")
+            print(f"      → {r['action']}{auto_tag}")
+    
+    if low:
+        print(f"\n  {C.CYAN}🔵 LOW:{C.RESET}")
+        for r in low:
+            auto_tag = f" {C.GREEN}[auto]{C.RESET}" if r.get('auto') else ""
+            print(f"    • {r['issue']}")
+            print(f"      → {r['action']}{auto_tag}")
+    
+    # Summary
+    auto_count = sum(1 for r in recommendations if r.get('auto'))
+    if auto_count == len(recommendations):
+        print(f"\n  {C.GREEN}All {auto_count} issues will auto-resolve on next gameplay/restart.{C.RESET}")
+
 def main():
     print(f"\n{C.BOLD}AGENTIC EMERALD HEALTH CHECK{C.RESET}")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -244,6 +385,10 @@ def main():
         agent_state / 'decisions.jsonl',
         agent_state / 'decisions_compressed.jsonl'
     )
+    
+    # Generate and print recommendations
+    recommendations = generate_recommendations(base)
+    print_recommendations(recommendations)
     
     print(f"\n{C.BOLD}Health check complete.{C.RESET}\n")
 
